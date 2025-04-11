@@ -1,0 +1,7 @@
+# Core dependencies for SpaceBridge-MCP
+mcp-sdk>=0.1.0 # Replace with actual version constraint if known
+requests>=2.20.0
+openai>=1.0.0 # For LLM comparison
+
+# Add other LLM client libraries here if needed (e.g., anthropic)
+# Add LLM client libraries here later (e.g., openai, anthropic)
