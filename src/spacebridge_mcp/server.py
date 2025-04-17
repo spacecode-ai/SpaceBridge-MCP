@@ -26,7 +26,7 @@ from .tools import (
     UpdateIssueInput, UpdateIssueOutput, # Added update schemas
     IssueSummary # Needed for create_issue logic
 )
-from typing import List, Dict, Any # Add Dict, Any for type hints
+from typing import List, Dict, Any, Literal, Optional # Add Dict, Any, Literal, Optional for type hints
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -143,14 +143,17 @@ async def get_issue_resource_handler(issue_id: str) -> Dict[str, Any]: # Return 
 # --- Define Tool Handlers ---
 
 @app.tool(name="search_issues", description="Searches for issues in SpaceBridge using full-text or similarity search.")
-async def search_issues_handler(params: SearchIssuesInput) -> SearchIssuesOutput:
+async def search_issues_handler(
+    query: str, 
+    search_type: Literal["full_text", "similarity"] = "full_text"
+) -> SearchIssuesOutput:
     """Implements the 'search_issues' tool using FastMCP."""
-    logger.info(f"Executing tool 'search_issues' with query: '{params.query}', type: {params.search_type}")
+    logger.info(f"Executing tool 'search_issues' with query: '{query}', type: {search_type}")
     try:
         # Use the globally initialized client
         search_results_raw = spacebridge_client.search_issues(
-            query=params.query,
-            search_type=params.search_type
+            query=query,
+            search_type=search_type
         )
 
         # Format results into the output schema
@@ -168,15 +171,16 @@ async def search_issues_handler(params: SearchIssuesInput) -> SearchIssuesOutput
         raise # Let FastMCP handle the error reporting
 
 @app.tool(name="create_issue", description="Creates a new issue in SpaceBridge, checking for potential duplicates first using similarity search and LLM comparison. Issue title and description should ALWAYS be in present tense.")
-async def create_issue_handler(params: CreateIssueInput) -> CreateIssueOutput:
+async def create_issue_handler(
+    title: str,
+    description: str
+) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
     Includes duplicate detection via similarity search followed by LLM comparison.
     """
-    logger.info(f"Executing tool 'create_issue' for title: '{params.title}'")
+    logger.info(f"Executing tool 'create_issue' for title: '{title}'")
     try:
-        title = params.title
-        description = params.description
         combined_text = f"{title}\n\n{description}"
 
         # 1. Search for potential duplicates
@@ -289,24 +293,29 @@ Respond with ONLY one of the following:
         raise # Let FastMCP handle the error reporting
 
 @app.tool(name="update_issue", description="Updates an existing issue in SpaceBridge.")
-async def update_issue_handler(params: UpdateIssueInput) -> UpdateIssueOutput:
+async def update_issue_handler(
+    issue_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None
+) -> UpdateIssueOutput:
     """Implements the 'update_issue' tool using FastMCP."""
-    logger.info(f"Executing tool 'update_issue' for issue ID: {params.issue_id}")
+    logger.info(f"Executing tool 'update_issue' for issue ID: {issue_id}")
     try:
         # Prepare arguments for the client method, excluding issue_id and None values
         update_args = {
-            "title": params.title,
-            "description": params.description,
-            "status": params.status,
-            # Add other fields from UpdateIssueInput if they exist
+            "title": title,
+            "description": description,
+            "status": status,
+            # Add other fields if they exist
         }
         # Filter out None values explicitly, as client method handles this, but good practice here too
         update_payload = {k: v for k, v in update_args.items() if v is not None}
 
         if not update_payload:
-             logger.warning(f"Update issue called for {params.issue_id} with no fields to update.")
+             logger.warning(f"Update issue called for {issue_id} with no fields to update.")
              return UpdateIssueOutput(
-                 issue_id=params.issue_id,
+                 issue_id=issue_id,
                  status="failed",
                  message="No fields provided to update.",
                  url=None # Or potentially fetch current URL if needed
@@ -314,25 +323,25 @@ async def update_issue_handler(params: UpdateIssueInput) -> UpdateIssueOutput:
 
         # Use the globally initialized client
         updated_issue_data = spacebridge_client.update_issue(
-            issue_id=params.issue_id,
+            issue_id=issue_id,
             **update_payload # Pass filtered fields as keyword arguments
         )
 
         # Assuming the client returns the updated issue data including URL
         output_data = UpdateIssueOutput(
-            issue_id=updated_issue_data.get("id", params.issue_id), # Use returned ID or original
+            issue_id=updated_issue_data.get("id", issue_id), # Use returned ID or original
             status="updated",
-            message=f"Successfully updated issue {params.issue_id}.",
+            message=f"Successfully updated issue {issue_id}.",
             url=updated_issue_data.get("url")
         )
-        logger.info(f"Tool 'update_issue' completed successfully for {params.issue_id}.")
+        logger.info(f"Tool 'update_issue' completed successfully for {issue_id}.")
         return output_data
 
     except Exception as e:
-        logger.error(f"Error executing tool 'update_issue' for {params.issue_id}: {e}", exc_info=True)
+        logger.error(f"Error executing tool 'update_issue' for {issue_id}: {e}", exc_info=True)
         # Return a failed output
         return UpdateIssueOutput(
-            issue_id=params.issue_id,
+            issue_id=issue_id,
             status="failed",
             message=f"An error occurred: {e}",
             url=None
