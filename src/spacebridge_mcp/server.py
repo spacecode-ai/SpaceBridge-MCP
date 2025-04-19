@@ -397,6 +397,10 @@ def main_sync():
         "--openai-api-key",
         help="OpenAI API key (overrides OPENAI_API_KEY env var and .env)"
     )
+    parser.add_argument(
+        "--project-dir",
+        help="Project directory path to find the git config (defaults to current working directory)"
+    )
     # Add other arguments as needed (e.g., --log-level)
 
     args = parser.parse_args()
@@ -428,8 +432,10 @@ def main_sync():
     # 5. Initialize clients using final configuration
     global spacebridge_client, openai_client # Need globals as handlers access these
     try:
-        # Get Git info using the runtime CWD
-        runtime_git_org, runtime_git_project = get_git_info(os.path.join(os.getcwd(), ".git/config"))
+        # Get Git info using the project directory if specified, otherwise use runtime CWD
+        project_dir = getattr(args, 'project_dir', None) or os.getcwd()
+        logger.info(f"Using project directory: {project_dir}")
+        runtime_git_org, runtime_git_project = get_git_info(os.path.join(project_dir, ".git/config"))
 
         logger.info("Initializing SpaceBridgeClient...")
         spacebridge_client = SpaceBridgeClient(
