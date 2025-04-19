@@ -60,8 +60,17 @@ def test_get_issue_not_found(client: SpaceBridgeClient):
         client.get_issue(issue_id)
 
 # Removed skipif and respx.mock
-def test_search_issues_success(client: SpaceBridgeClient, client_config):
-    """Test successful search for issues, including org/project params."""
+@pytest.mark.parametrize(
+    "call_context", # Add parameter for explicit call arguments
+    [
+        {}, # No explicit args passed to method
+        {"org": "call_org", "project": "call_proj"}, # Explicit args passed
+        {"org": "call_org", "project": None}, # Explicit org only
+        {"org": None, "project": "call_proj"}, # Explicit project only
+    ]
+)
+def test_search_issues_success(client: SpaceBridgeClient, client_config, call_context):
+    """Test successful search, checking client startup vs explicit call context."""
     query = "bug fix"
     search_type = "full_text"
     expected_results = [
@@ -69,94 +78,125 @@ def test_search_issues_success(client: SpaceBridgeClient, client_config):
         {"id": "SB-2", "title": "Bug in search results"},
     ]
 
-    # Build expected params based on client config
-    expected_params = {"query": query, "type": search_type}
-    if client_config["org"]:
-        expected_params["organization"] = client_config["org"]
-    if client_config["project"]:
-        expected_params["project"] = client_config["project"]
+    # Determine the context expected in the API call params
+    # Explicit call args override client startup config
+    final_org = call_context.get("org") if call_context.get("org") is not None else client_config.get("org")
+    final_project = call_context.get("project") if call_context.get("project") is not None else client_config.get("project")
 
-    # Reverted to direct respx usage
+    expected_params = {"query": query, "type": search_type}
+    if final_org:
+        expected_params["organization"] = final_org
+    if final_project:
+        expected_params["project"] = final_project
+
+    # Mock the API call with the expected parameters
     search_route = respx.get(f"{MOCK_API_URL}/issues/search", params=expected_params).mock(
         return_value=Response(200, json=expected_results)
     )
-    # Removed extra parenthesis
 
-    results = client.search_issues(query=query, search_type=search_type)
+    # Call the client method with explicit args from call_context
+    results = client.search_issues(
+        query=query,
+        search_type=search_type,
+        org_name=call_context.get("org"),
+        project_name=call_context.get("project")
+    )
     assert results == expected_results
-    # Assertions below assume the call succeeded (either mocked or live)
-    # For live tests, this assumes the search returns the exact expected_results
-    assert results == expected_results
+
+    # Verify the API call used the correctly prioritized context
     if os.getenv("RUN_LIVE_API_TESTS") != "1": # Only check respx calls if mocking
         assert search_route.called
         assert dict(respx.calls.last.request.url.params) == expected_params
-    # Add assertion for live mode? Difficult without knowing live data.
-    # assert isinstance(results, list) # Basic check for live mode
 
 # Removed skipif and respx.mock
-def test_search_issues_similarity_success(client: SpaceBridgeClient, client_config):
-    """Test successful similarity search, including org/project params."""
+@pytest.mark.parametrize(
+    "call_context", # Add parameter for explicit call arguments
+    [
+        {}, # No explicit args passed to method
+        {"org": "call_org", "project": "call_proj"}, # Explicit args passed
+    ]
+)
+def test_search_issues_similarity_success(client: SpaceBridgeClient, client_config, call_context):
+    """Test successful similarity search, checking context priority."""
     query = "similar bug"
     search_type = "similarity"
     expected_results = [
         {"id": "SB-1", "title": "Fix login bug", "score": 0.9},
     ]
 
-    # Build expected params based on client config
-    expected_params = {"query": query, "type": search_type}
-    if client_config["org"]:
-        expected_params["organization"] = client_config["org"]
-    if client_config["project"]:
-        expected_params["project"] = client_config["project"]
+    # Determine the context expected in the API call params
+    final_org = call_context.get("org") if call_context.get("org") is not None else client_config.get("org")
+    final_project = call_context.get("project") if call_context.get("project") is not None else client_config.get("project")
 
-    # Reverted to direct respx usage
-    search_route = respx.get(f"{MOCK_API_URL}/issues/search", params=expected_params).mock( # Corrected path
+    expected_params = {"query": query, "type": search_type}
+    if final_org:
+        expected_params["organization"] = final_org
+    if final_project:
+        expected_params["project"] = final_project
+
+    # Mock the API call with the expected parameters
+    search_route = respx.get(f"{MOCK_API_URL}/issues/search", params=expected_params).mock(
         return_value=Response(200, json=expected_results)
     )
-    # Removed extra parenthesis
 
-    results = client.search_issues(query=query, search_type=search_type)
+    # Call the client method with explicit args from call_context
+    results = client.search_issues(
+        query=query,
+        search_type=search_type,
+        org_name=call_context.get("org"),
+        project_name=call_context.get("project")
+    )
     assert results == expected_results
-    # Assertions assume call succeeded
-    assert results == expected_results
+
+    # Verify the API call used the correctly prioritized context
     if os.getenv("RUN_LIVE_API_TESTS") != "1": # Only check respx calls if mocking
         assert search_route.called
         assert dict(respx.calls.last.request.url.params) == expected_params
-    # assert isinstance(results, list) # Basic check for live mode
 
 
 # Removed skipif and respx.mock
-def test_create_issue_success(client: SpaceBridgeClient, client_config):
-    """Test successful creation of an issue, including org/project payload."""
+@pytest.mark.parametrize(
+    "call_context", # Add parameter for explicit call arguments
+    [
+        {}, # No explicit args passed to method
+        {"org": "call_org", "project": "call_proj"}, # Explicit args passed
+    ]
+)
+def test_create_issue_success(client: SpaceBridgeClient, client_config, call_context):
+    """Test successful creation, checking context priority."""
     title = "New Feature"
     description = "Add dark mode"
     expected_response = {"id": "SB-NEW", "title": title, "description": description, "status": "New"}
 
-    # Build expected payload based on client config
-    expected_payload = {"title": title, "description": description}
-    if client_config["org"]:
-        expected_payload["organization"] = client_config["org"]
-    if client_config["project"]:
-        expected_payload["project"] = client_config["project"]
+    # Determine the context expected in the API call payload
+    final_org = call_context.get("org") if call_context.get("org") is not None else client_config.get("org")
+    final_project = call_context.get("project") if call_context.get("project") is not None else client_config.get("project")
 
-    # Reverted to direct respx usage
+    expected_payload = {"title": title, "description": description}
+    if final_org:
+        expected_payload["organization"] = final_org
+    if final_project:
+        expected_payload["project"] = final_project
+
+    # Mock the API call
     create_route = respx.post(f"{MOCK_API_URL}/issues").mock(
         return_value=Response(201, json=expected_response)
     )
-    # Removed extra parenthesis
 
-    new_issue = client.create_issue(title=title, description=description)
+    # Call the client method with explicit args from call_context
+    new_issue = client.create_issue(
+        title=title,
+        description=description,
+        org_name=call_context.get("org"),
+        project_name=call_context.get("project")
+    )
     assert new_issue == expected_response
 
     # Verify the request payload was correct
-    # Assertions assume call succeeded
-    assert new_issue == expected_response # This might fail live if response differs slightly
     if os.getenv("RUN_LIVE_API_TESTS") != "1": # Only check respx calls if mocking
         assert create_route.called
         sent_payload = json.loads(respx.calls.last.request.content)
         assert sent_payload == expected_payload
-    # Add assertion for live mode? Check if 'id' exists?
-    # assert "id" in new_issue
 
 
 def test_client_init_missing_url(monkeypatch):
@@ -174,38 +214,48 @@ def test_client_init_missing_key(monkeypatch):
         SpaceBridgeClient()
 
 # Removed skipif and respx.mock
-def test_update_issue_success(client: SpaceBridgeClient, client_config):
-    """Test successful update of an issue, including org/project payload."""
+@pytest.mark.parametrize(
+    "call_context", # Add parameter for explicit call arguments
+    [
+        {}, # No explicit args passed to method
+        {"org": "call_org", "project": "call_proj"}, # Explicit args passed
+    ]
+)
+def test_update_issue_success(client: SpaceBridgeClient, client_config, call_context):
+    """Test successful update, checking context priority."""
     issue_id = "SB-EXISTING"
     update_data = {"status": "In Progress", "title": "Updated Title"}
-    # Assume API returns the updated issue data
     expected_response = {"id": issue_id, "title": "Updated Title", "description": "Existing Desc", "status": "In Progress"}
 
-    # Build expected payload based on client config and update_data
-    expected_payload = update_data.copy() # Start with fields being updated
-    if client_config["org"]:
-        expected_payload["organization"] = client_config["org"]
-    if client_config["project"]:
-        expected_payload["project"] = client_config["project"]
+    # Determine the context expected in the API call payload
+    final_org = call_context.get("org") if call_context.get("org") is not None else client_config.get("org")
+    final_project = call_context.get("project") if call_context.get("project") is not None else client_config.get("project")
 
-    # Reverted to direct respx usage
+    expected_payload = update_data.copy() # Start with actual update fields
+    if final_org:
+        expected_payload["organization"] = final_org
+    if final_project:
+        expected_payload["project"] = final_project
+
+    # Mock the API call
     update_route = respx.patch(f"{MOCK_API_URL}/issues/{issue_id}").mock(
         return_value=Response(200, json=expected_response)
     )
-    # Removed extra parenthesis
 
-    updated_issue = client.update_issue(issue_id=issue_id, **update_data)
+    # Call the client method with explicit args from call_context
+    updated_issue = client.update_issue(
+        issue_id=issue_id,
+        org_name=call_context.get("org"),
+        project_name=call_context.get("project"),
+        **update_data # Pass other update fields
+    )
     assert updated_issue == expected_response
 
     # Verify the request payload was correct
-    # Assertions assume call succeeded
-    assert updated_issue == expected_response # Might fail live
     if os.getenv("RUN_LIVE_API_TESTS") != "1": # Only check respx calls if mocking
         assert update_route.called
         sent_payload = json.loads(respx.calls.last.request.content)
         assert sent_payload == expected_payload
-    # Add assertion for live mode? Check if status matches?
-    # assert updated_issue.get("status") == update_data["status"]
 
 # Removed skipif and respx.mock (no HTTP call expected)
 def test_update_issue_no_fields(client: SpaceBridgeClient, client_config):

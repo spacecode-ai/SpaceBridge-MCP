@@ -17,13 +17,14 @@ SpaceBridge-MCP is a Model Context Protocol (MCP) server designed to integrate A
 
 **Functionality:**
 
-The server exposes MCP tools and resources that translate natural language requests from an AI assistant into SpaceBridge API calls. Key features include intelligent duplicate checking (using similarity search and LLM comparison) before issue creation and automatic inclusion of Git repository context (organization/project name) in relevant API requests.
+The server exposes MCP tools and resources that translate natural language requests from an AI assistant into SpaceBridge API calls. Key features include intelligent duplicate checking (using similarity search and LLM comparison) before issue creation and flexible handling of organization/project context.
 
 ## Features
 
 *   **Resource:** `get_issue_by_id`: Retrieves details for a specific issue using its SpaceBridge ID.
-*   **Tool:** `search_issues`: Searches for issues based on a query string using either full-text or similarity search provided by the SpaceBridge API.
-*   **Tool:** `create_issue`: Creates a new issue. Before creation, it performs a similarity search for potentially duplicate issues and uses an LLM to compare the top results against the new issue's content. If a likely duplicate is found, it returns the existing issue's ID; otherwise, it creates the new issue via the SpaceBridge API.
+*   **Tool:** `search_issues`: Searches for issues based on a query string using either full-text or similarity search.
+*   **Tool:** `create_issue`: Creates a new issue. Before creation, it performs a similarity search for potentially duplicate issues and uses an LLM to compare the top results against the new issue's content. If a likely duplicate is found, it returns the existing issue's ID; otherwise, it creates the new issue.
+*   **Tool:** `update_issue`: Updates an existing issue.
 
 ## Getting Started
 
@@ -71,36 +72,54 @@ The server requires the following configuration values:
 *   **SpaceBridge API Key:** Your API key for authenticating with SpaceBridge.
 *   **OpenAI API Key:** Your API key for OpenAI, used by the `create_issue` tool for duplicate checking.
 
-These values can be provided in three ways, with the following order of precedence (highest first):
+These values, along with organization/project context, can be provided in multiple ways. The server determines the final values based on the following order of precedence (highest first):
 
-1.  **Command-line Arguments:** Pass arguments when running the server:
+1.  **Command-line Arguments:** Pass arguments when running the server. These override all other methods.
     ```bash
     spacebridge-mcp-server \
       --spacebridge-api-url "YOUR_URL" \
       --spacebridge-api-key "YOUR_SB_KEY" \
-      --openai-api-key "YOUR_OPENAI_KEY"
+      --openai-api-key "YOUR_OPENAI_KEY" \
+      --org-name "YOUR_ORG" \        # Explicit Org Name
+      --project-name "YOUR_PROJECT"  # Explicit Project Name
+      # --project-dir "/path/to/your/project" # Optional: Specify dir for Git detection
     ```
     *(Use `spacebridge-mcp-server --help` to see all available arguments.)*
 
-2.  **Environment Variables:** Set standard environment variables:
+2.  **Environment Variables:** Set standard environment variables. These override `.env` files and Git detection.
     ```bash
     export SPACEBRIDGE_API_URL="YOUR_URL"
     export SPACEBRIDGE_API_KEY="YOUR_SB_KEY"
     export OPENAI_API_KEY="YOUR_OPENAI_KEY"
+    export SPACEBRIDGE_ORG_NAME="YOUR_ORG"        # Explicit Org Name
+    export SPACEBRIDGE_PROJECT_NAME="YOUR_PROJECT"  # Explicit Project Name
     # Then run:
     spacebridge-mcp-server
     ```
 
-3.  **.env File:** Create a file named `.env` in the directory where you run the server:
+3.  **.env File:** Create a file named `.env` in the directory where you run the server. Environment variables and command-line arguments override values in this file.
     ```dotenv
     # .env file content
     SPACEBRIDGE_API_URL="YOUR_URL"
     SPACEBRIDGE_API_KEY="YOUR_SB_KEY"
     OPENAI_API_KEY="YOUR_OPENAI_KEY"
+    SPACEBRIDGE_ORG_NAME="YOUR_ORG"
+    SPACEBRIDGE_PROJECT_NAME="YOUR_PROJECT"
     ```
-    The server will automatically load values from this file if it exists. Values from environment variables or command-line arguments will override those in the `.env` file.
+    The server automatically loads values from this file if it exists.
 
-**Note:** When configuring MCP clients like Claude code (see "Connecting MCP Clients" section), passing credentials via the client's `--env` flags effectively sets them as environment variables for the server process.
+4.  **Git Configuration Detection:** If organization and project are not set via arguments or environment variables, the server attempts to detect them from the `.git/config` file.
+    *   It first checks in the directory specified by the `--project-dir` argument (if provided).
+    *   If `--project-dir` is not used, it checks the current working directory where the server was started.
+
+**Context Handling Priority:**
+
+The organization and project context used for API calls is determined as follows:
+
+1.  **Startup Context:** The context determined during server startup (using the precedence above: Args > Env Vars > Git Detection) is used by default.
+2.  **Tool Parameter Fallback:** If (and only if) the server could *not* determine the context during startup (e.g., no explicit config provided and not running in a Git repository), the optional `org_name` and `project_name` parameters provided in a tool call (`search_issues`, `create_issue`, `update_issue`) will be used as a fallback.
+
+**Note on Client Configuration:** When configuring MCP clients like Claude code (see "Connecting MCP Clients" section), passing credentials or context via the client's `--env` flags effectively sets them as environment variables for the server process (Priority 2). This is the recommended way to provide explicit context in environments where Git detection might fail (like Windsurf or Cursor).
 
 ### Running the Server
 
@@ -130,7 +149,9 @@ claude mcp add spacebridge \
   --scope user \
   --env SPACEBRIDGE_API_URL="https://your-spacebridge.com/api" \
   --env SPACEBRIDGE_API_KEY="your-spacebridge-api-key" \
-  --env OPENAI_API_KEY="your-openai-api-key"
+  --env OPENAI_API_KEY="your-openai-api-key" \
+  --env SPACEBRIDGE_ORG_NAME="your-explicit-org" \      # Add this if needed
+  --env SPACEBRIDGE_PROJECT_NAME="your-explicit-project" # Add this if needed
 ```
 
 *   Replace `/full/path/to/your/spacebridge-mcp-server` with the actual path found in step 2.
@@ -139,7 +160,7 @@ claude mcp add spacebridge \
 
 **Other Clients (Windsurf, Cursor, etc.):**
 
-Refer to the specific documentation for your client. The general principle is the same: provide a name for the server and the command to execute it, ensuring the necessary environment variables (`SPACEBRIDGE_API_URL`, `SPACEBRIDGE_API_KEY`, `OPENAI_API_KEY`) are passed to the command's environment. Some clients might have dedicated fields for environment variables, while others might require a wrapper script (see previous README versions for an example script).
+Refer to the specific documentation for your client. The general principle is the same: provide a name for the server and the command to execute it, ensuring the necessary environment variables (`SPACEBRIDGE_API_URL`, `SPACEBRIDGE_API_KEY`, `OPENAI_API_KEY`, and optionally `SPACEBRIDGE_ORG_NAME`, `SPACEBRIDGE_PROJECT_NAME`) are passed to the command's environment. Some clients might have dedicated fields for environment variables, while others might require a wrapper script. Passing `SPACEBRIDGE_ORG_NAME` and `SPACEBRIDGE_PROJECT_NAME` is recommended for clients where the server's working directory might not match the actual project directory (e.g., Windsurf, Cursor).
 
 ## Usage Tips & Agentic Workflows
 
