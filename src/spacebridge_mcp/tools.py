@@ -25,6 +25,14 @@ class SearchIssuesInput(BaseModel):
         default="full_text",
         description="The type of search to perform."
     )
+    org_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured organization context."
+    )
+    project_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured project context."
+    )
 
 class IssueSummary(BaseModel):
     id: str = Field(..., description="The unique identifier of the issue.")
@@ -39,6 +47,14 @@ class SearchIssuesOutput(BaseModel):
 class CreateIssueInput(BaseModel):
     title: str = Field(..., description="The title for the new issue.")
     description: str = Field(..., description="The detailed description for the new issue.")
+    org_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured organization context."
+    )
+    project_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured project context."
+    )
 
 class CreateIssueOutput(BaseModel):
     issue_id: str = Field(..., description="The ID of the created or potentially duplicate existing issue.")
@@ -52,6 +68,14 @@ class UpdateIssueInput(BaseModel):
     description: Optional[str] = Field(None, description="The new description for the issue.")
     status: Optional[str] = Field(None, description="The new status for the issue (e.g., 'Open', 'In Progress', 'Closed'). Exact values depend on the tracker.")
     # Add other updatable fields as needed (e.g., assignee, labels)
+    org_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured organization context."
+    )
+    project_name: Optional[str] = Field(
+        None,
+        description="Optional: Override the server's detected/configured project context."
+    )
 
 class UpdateIssueOutput(BaseModel):
     issue_id: str = Field(..., description="The ID of the updated issue.")

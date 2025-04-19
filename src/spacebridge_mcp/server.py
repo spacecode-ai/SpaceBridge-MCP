@@ -105,9 +105,7 @@ def get_git_info(git_config_path=".git/config") -> tuple[str | None, str | None]
 
    return org_name, project_name
 
-# Attempt to get git info at module level (might be useful for client init)
-# Use current working directory's .git/config by default
-git_org_name, git_project_name = get_git_info(os.path.join(os.getcwd(), ".git/config"))
+# Git info will be determined within main_sync based on configuration precedence.
 
 
 # --- Create FastMCP App ---
@@ -142,18 +140,30 @@ async def get_issue_resource_handler(issue_id: str) -> Dict[str, Any]: # Return 
 
 # --- Define Tool Handlers ---
 
-@app.tool(name="search_issues", description="Searches for issues in SpaceBridge using full-text or similarity search.")
+@app.tool(
+    name="search_issues",
+    description="Searches for issues in the project's issue tracker. ALWAYS include project_name in the params."
+)
 async def search_issues_handler(
-    query: str, 
-    search_type: Literal["full_text", "similarity"] = "full_text"
+    query: str,
+    search_type: Literal["full_text", "similarity"] = "full_text",
+    org_name: Optional[str] = None,      # Added optional param
+    project_name: Optional[str] = None   # Added optional param
 ) -> SearchIssuesOutput:
     """Implements the 'search_issues' tool using FastMCP."""
-    logger.info(f"Executing tool 'search_issues' with query: '{query}', type: {search_type}")
+    logger.info(f"Executing tool 'search_issues' with query: '{query}', type: {search_type}, org: {org_name}, project: {project_name}")
     try:
-        # Use the globally initialized client
+        # Determine final context (Startup context takes priority)
+        final_org_name = spacebridge_client.org_name if spacebridge_client.org_name is not None else org_name
+        final_project_name = spacebridge_client.project_name if spacebridge_client.project_name is not None else project_name
+        logger.debug(f"Search using context: Org='{final_org_name}', Project='{final_project_name}'")
+
+        # Use the globally initialized client, passing the determined context
         search_results_raw = spacebridge_client.search_issues(
             query=query,
-            search_type=search_type
+            search_type=search_type,
+            org_name=final_org_name,      # Pass final context
+            project_name=final_project_name # Pass final context
         )
 
         # Format results into the output schema
@@ -170,26 +180,40 @@ async def search_issues_handler(
         # TODO: Raise specific FastMCP tool error?
         raise # Let FastMCP handle the error reporting
 
-@app.tool(name="create_issue", description="Creates a new issue in SpaceBridge, checking for potential duplicates first using similarity search and LLM comparison. Issue title and description should ALWAYS be in present tense.")
+@app.tool(
+    name="create_issue",
+    description="Creates a new issue in SpaceBridge, checking for duplicates. Optionally accepts org/project context as fallback. Issue title and description should ALWAYS be in present tense."
+)
 async def create_issue_handler(
     title: str,
-    description: str
+    description: str,
+    org_name: Optional[str] = None,      # Added optional param
+    project_name: Optional[str] = None   # Added optional param
 ) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
     Includes duplicate detection via similarity search followed by LLM comparison.
+    Uses startup context first, then tool parameters as fallback for org/project.
     """
-    logger.info(f"Executing tool 'create_issue' for title: '{title}'")
+    logger.info(f"Executing tool 'create_issue' for title: '{title}', org: {org_name}, project: {project_name}")
     try:
+        # Determine final context (Startup context takes priority)
+        final_org_name = spacebridge_client.org_name if spacebridge_client.org_name is not None else org_name
+        final_project_name = spacebridge_client.project_name if spacebridge_client.project_name is not None else project_name
+        logger.debug(f"Create using context: Org='{final_org_name}', Project='{final_project_name}'")
+
         combined_text = f"{title}\n\n{description}"
 
-        # 1. Search for potential duplicates
+        # 1. Search for potential duplicates using final context
         logger.info(f"Searching for potential duplicates for: '{title}'")
         potential_duplicates: List[IssueSummary] = []
         try:
+            # Pass final context to search
             potential_duplicates_raw = spacebridge_client.search_issues(
                 query=combined_text,
-                search_type="similarity"
+                search_type="similarity",
+                org_name=final_org_name,
+                project_name=final_project_name
             )
             potential_duplicates = [IssueSummary(**dup) for dup in potential_duplicates_raw]
             logger.info(f"Found {len(potential_duplicates)} potential duplicates.")
@@ -265,9 +289,12 @@ Respond with ONLY one of the following:
         # 3. Create or return duplicate info
         if not duplicate_found:
             logger.info(f"No significant duplicate found or LLM check failed/skipped. Creating new issue...")
+            # Pass final context to create
             created_issue_data = spacebridge_client.create_issue(
                 title=title,
-                description=description
+                description=description,
+                org_name=final_org_name,
+                project_name=final_project_name
             )
             output_data = CreateIssueOutput(
                 issue_id=created_issue_data.get("id", "UNKNOWN"),
@@ -292,16 +319,29 @@ Respond with ONLY one of the following:
         # TODO: Raise specific FastMCP tool error?
         raise # Let FastMCP handle the error reporting
 
-@app.tool(name="update_issue", description="Updates an existing issue in SpaceBridge.")
+@app.tool(
+    name="update_issue",
+    description="Updates an existing issue in SpaceBridge. Optionally accepts org/project context as fallback."
+)
 async def update_issue_handler(
     issue_id: str,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    org_name: Optional[str] = None,      # Added optional param
+    project_name: Optional[str] = None   # Added optional param
 ) -> UpdateIssueOutput:
-    """Implements the 'update_issue' tool using FastMCP."""
-    logger.info(f"Executing tool 'update_issue' for issue ID: {issue_id}")
+    """
+    Implements the 'update_issue' tool using FastMCP.
+    Uses startup context first, then tool parameters as fallback for org/project.
+    """
+    logger.info(f"Executing tool 'update_issue' for issue ID: {issue_id}, org: {org_name}, project: {project_name}")
     try:
+        # Determine final context (Startup context takes priority)
+        final_org_name = spacebridge_client.org_name if spacebridge_client.org_name is not None else org_name
+        final_project_name = spacebridge_client.project_name if spacebridge_client.project_name is not None else project_name
+        logger.debug(f"Update using context: Org='{final_org_name}', Project='{final_project_name}'")
+
         # Prepare arguments for the client method, excluding issue_id and None values
         update_args = {
             "title": title,
@@ -309,7 +349,7 @@ async def update_issue_handler(
             "status": status,
             # Add other fields if they exist
         }
-        # Filter out None values explicitly, as client method handles this, but good practice here too
+        # Filter out None values explicitly
         update_payload = {k: v for k, v in update_args.items() if v is not None}
 
         if not update_payload:
@@ -318,12 +358,14 @@ async def update_issue_handler(
                  issue_id=issue_id,
                  status="failed",
                  message="No fields provided to update.",
-                 url=None # Or potentially fetch current URL if needed
+                 url=None
              )
 
-        # Use the globally initialized client
+        # Use the globally initialized client, passing the determined context
         updated_issue_data = spacebridge_client.update_issue(
             issue_id=issue_id,
+            org_name=final_org_name,      # Pass final context
+            project_name=final_project_name, # Pass final context
             **update_payload # Pass filtered fields as keyword arguments
         )
 
@@ -401,6 +443,14 @@ def main_sync():
         "--project-dir",
         help="Project directory path to find the git config (defaults to current working directory)"
     )
+    parser.add_argument(
+        "--org-name",
+        help="Explicitly set the organization name (overrides env var and Git detection)"
+    )
+    parser.add_argument(
+        "--project-name",
+        help="Explicitly set the project name (overrides env var and Git detection)"
+    )
     # Add other arguments as needed (e.g., --log-level)
 
     args = parser.parse_args()
@@ -432,17 +482,54 @@ def main_sync():
     # 5. Initialize clients using final configuration
     global spacebridge_client, openai_client # Need globals as handlers access these
     try:
-        # Get Git info using the project directory if specified, otherwise use runtime CWD
-        project_dir = getattr(args, 'project_dir', None) or os.getcwd()
-        logger.info(f"Using project directory: {project_dir}")
-        runtime_git_org, runtime_git_project = get_git_info(os.path.join(project_dir, ".git/config"))
+        # Determine startup org and project context based on precedence
+        startup_org_name = None
+        startup_project_name = None
+
+        # 1. Command-line arguments
+        if getattr(args, 'org_name', None):
+            startup_org_name = args.org_name
+            logger.info(f"Using organization name from command-line argument: {startup_org_name}")
+        if getattr(args, 'project_name', None):
+            startup_project_name = args.project_name
+            logger.info(f"Using project name from command-line argument: {startup_project_name}")
+
+        # 2. Environment variables (only if not set by args)
+        if startup_org_name is None:
+            env_org = os.getenv("SPACEBRIDGE_ORG_NAME")
+            if env_org:
+                startup_org_name = env_org
+                logger.info(f"Using organization name from SPACEBRIDGE_ORG_NAME env var: {startup_org_name}")
+        if startup_project_name is None:
+            env_project = os.getenv("SPACEBRIDGE_PROJECT_NAME")
+            if env_project:
+                startup_project_name = env_project
+                logger.info(f"Using project name from SPACEBRIDGE_PROJECT_NAME env var: {startup_project_name}")
+
+        # 3. Git detection (--project-dir or CWD) (only if not set by args or env vars)
+        if startup_org_name is None or startup_project_name is None:
+            project_dir_arg = getattr(args, 'project_dir', None)
+            git_config_dir = project_dir_arg or os.getcwd()
+            git_config_path = os.path.join(git_config_dir, ".git/config")
+            logger.info(f"Attempting Git context detection from: {git_config_path}")
+            detected_org, detected_project = get_git_info(git_config_path)
+
+            if startup_org_name is None and detected_org:
+                startup_org_name = detected_org
+                logger.info(f"Using organization name from Git detection: {startup_org_name}")
+            if startup_project_name is None and detected_project:
+                startup_project_name = detected_project
+                logger.info(f"Using project name from Git detection: {startup_project_name}")
+
+        # Log final determined context
+        logger.info(f"Final startup context: Org='{startup_org_name}', Project='{startup_project_name}'")
 
         logger.info("Initializing SpaceBridgeClient...")
         spacebridge_client = SpaceBridgeClient(
             api_url=final_api_url,
             api_key=final_api_key,
-            org_name=runtime_git_org,
-            project_name=runtime_git_project
+            org_name=startup_org_name,      # Use determined startup context
+            project_name=startup_project_name # Use determined startup context
         )
         logger.info("Initializing OpenAI Client...")
         openai_client = openai.AsyncOpenAI(api_key=final_openai_key)

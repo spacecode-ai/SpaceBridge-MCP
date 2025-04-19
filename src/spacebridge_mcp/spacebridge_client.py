@@ -78,18 +78,29 @@ class SpaceBridgeClient:
         return self._request("GET", f"/api/v1/issues/{issue_id}")
 
 
-    def search_issues(self, query: str, search_type: str = "full_text") -> List[Dict[str, Any]]:
+    def search_issues(
+        self,
+        query: str,
+        search_type: str = "full_text",
+        org_name: Optional[str] = None,      # Added optional param
+        project_name: Optional[str] = None   # Added optional param
+    ) -> List[Dict[str, Any]]:
         """
         Searches for issues using full-text or similarity search.
-        Corresponds to: GET issues/search?query={query}&type={search_type}
+        Uses provided org/project context if available, otherwise falls back to client's startup context.
+        Corresponds to: GET /api/v1/issues/search?query={query}&type={search_type}
         """
-        # print(f"Searching issues with query '{query}' (type: {search_type}) via SpaceBridge...") # Optional debug print
         params = {"query": query, "type": search_type}
-        # Add org and project if available
-        if self.org_name:
-            params["organization"] = self.org_name
-        if self.project_name:
-            params["project"] = self.project_name
+
+        # Determine context to use (passed arg takes precedence over startup context)
+        final_org_name = org_name if org_name is not None else self.org_name
+        final_project_name = project_name if project_name is not None else self.project_name
+
+        # Add org and project to params if determined
+        if final_org_name:
+            params["organization"] = final_org_name
+        if final_project_name:
+            params["project"] = final_project_name
 
         logger.info(f"Searching issues with params: {params}")
         # Assuming the API returns a list directly or a dict containing a list key (e.g., 'results')
@@ -107,48 +118,72 @@ class SpaceBridgeClient:
              print(f"Warning: Unexpected format received from search API: {type(response_data)}")
              return [] # Return empty list if format is wrong
 
-    def create_issue(self, title: str, description: str) -> Dict[str, Any]:
+    def create_issue(
+        self,
+        title: str,
+        description: str,
+        org_name: Optional[str] = None,      # Added optional param
+        project_name: Optional[str] = None   # Added optional param
+    ) -> Dict[str, Any]:
         """
         Creates a new issue.
+        Uses provided org/project context if available, otherwise falls back to client's startup context.
         Corresponds to: POST /api/v1/issues
         """
-        # print(f"Creating issue '{title}' via SpaceBridge...") # Optional debug print
         payload = {"title": title, "description": description}
-        # Add org and project if available
-        if self.org_name:
-            payload["organization"] = self.org_name
-        if self.project_name:
-            payload["project"] = self.project_name
+
+        # Determine context to use (passed arg takes precedence over startup context)
+        final_org_name = org_name if org_name is not None else self.org_name
+        final_project_name = project_name if project_name is not None else self.project_name
+
+        # Add org and project to payload if determined
+        if final_org_name:
+            payload["organization"] = final_org_name
+        if final_project_name:
+            payload["project"] = final_project_name
 
         # Pass json payload directly to httpx request
         logger.info(f"Creating issue with payload: {payload}")
         return self._request("POST", "/api/v1/issues", json=payload)
 
-    def update_issue(self, issue_id: str, **kwargs) -> Dict[str, Any]:
+    def update_issue(
+        self,
+        issue_id: str,
+        org_name: Optional[str] = None,      # Added optional param
+        project_name: Optional[str] = None,   # Added optional param
+        **kwargs
+    ) -> Dict[str, Any]:
         """
         Updates an existing issue using PATCH.
+        Uses provided org/project context if available, otherwise falls back to client's startup context.
 
         Args:
             issue_id: The ID of the issue to update.
+            org_name: Optional organization context override.
+            project_name: Optional project context override.
             **kwargs: Fields to update (e.g., title="New Title", status="Closed").
                       Only non-None values will be included in the request.
 
         Corresponds to: PATCH /api/v1/issues/{issue_id}
         """
-        payload = {k: v for k, v in kwargs.items() if v is not None}
+        # Separate update fields from context args (though context args are named)
+        update_fields = {k: v for k, v in kwargs.items() if v is not None}
 
-        if not payload:
+        if not update_fields:
             logger.warning(f"Update issue called for {issue_id} with no fields to update.")
-            # Optionally return current issue data or raise an error
-            # For now, return an empty dict or fetch current data? Let's return empty.
-            # Consider fetching current data: return self.get_issue(issue_id)
-            return {"id": issue_id, "message": "No fields provided for update."} # Return minimal info
+            return {"id": issue_id, "message": "No fields provided for update."}
 
-        # Add org and project context if available (API might use this for authorization/scoping)
-        if self.org_name:
-            payload["organization"] = self.org_name
-        if self.project_name:
-            payload["project"] = self.project_name
+        payload = update_fields.copy() # Start payload with actual update fields
+
+        # Determine context to use (passed arg takes precedence over startup context)
+        final_org_name = org_name if org_name is not None else self.org_name
+        final_project_name = project_name if project_name is not None else self.project_name
+
+        # Add org and project context to payload if determined (API might use this for authorization/scoping)
+        if final_org_name:
+            payload["organization"] = final_org_name
+        if final_project_name:
+            payload["project"] = final_project_name
 
         logger.info(f"Updating issue {issue_id} with payload: {payload}")
         # Assuming PATCH returns the updated issue data
