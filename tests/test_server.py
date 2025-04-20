@@ -15,7 +15,7 @@ import argparse # Add import for config test
 # For now, assume imports work and clients are accessible or mockable.
 from spacebridge_mcp.server import (
     app, # The FastMCP app instance
-    get_issue_resource_handler,
+    get_issue_tool_handler,
     search_issues_handler,
     create_issue_handler,
     update_issue_handler, # Added update handler
@@ -43,7 +43,7 @@ MOCK_API_URL = "http://localhost:8000/api/v1"
 
 # Removed respx mock, will mock client method instead
 @pytest.mark.asyncio
-async def test_get_issue_resource_handler_success():
+async def test_get_issue_tool_handler_success():
     """Test successful resource retrieval."""
     issue_id = "SB-1"
     expected_data = {"id": issue_id, "title": "Resource Test", "status": "Closed"}
@@ -52,7 +52,7 @@ async def test_get_issue_resource_handler_success():
     mock_client_instance.get_issue.return_value = expected_data
     with patch("spacebridge_mcp.server.spacebridge_client", mock_client_instance):
         # Call the handler
-        result_data: Dict[str, Any] = await get_issue_resource_handler(issue_id=issue_id)
+        result_data: Dict[str, Any] = await get_issue_tool_handler(issue_id=issue_id)
 
     # Assert the method on the mocked global client was called
     mock_client_instance.get_issue.assert_called_once_with(issue_id)
@@ -63,7 +63,7 @@ async def test_get_issue_resource_handler_success():
 
 # Removed respx mock, will mock client method to raise error
 @pytest.mark.asyncio
-async def test_get_issue_resource_handler_not_found():
+async def test_get_issue_tool_handler_not_found():
     """Test resource handler when client raises an error."""
     issue_id = "SB-404"
     # Mock the *global* client instance used by the handler
@@ -74,7 +74,7 @@ async def test_get_issue_resource_handler_not_found():
     with patch("spacebridge_mcp.server.spacebridge_client", mock_client_instance):
         # Expect the handler to re-raise the exception from the client
         with pytest.raises(Exception, match="Simulated client error"):
-             await get_issue_resource_handler(issue_id=issue_id)
+             await get_issue_tool_handler(issue_id=issue_id)
 
     # Assert the method on the mocked global client was called
     mock_client_instance.get_issue.assert_called_once_with(issue_id)

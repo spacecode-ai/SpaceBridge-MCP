@@ -117,28 +117,28 @@ app = FastMCP(
     # Pass settings directly if needed, e.g., log_level="DEBUG"
 )
 
-# --- Define Resource Handlers ---
+# --- Define Tool Handlers ---
 
-@app.resource("spacebridge://api/v1/issues/{issue_id}")
-async def get_issue_resource_handler(issue_id: str) -> Dict[str, Any]: # Return dict directly
+# TODO: Change this back to an MCP resource handler when there is wider client support for MCP resources.
+@app.tool(
+    name="get_issue",
+    description="Retrieves a specific issue by issue_id from SpaceBridge. Optionally accepts org/project context as fallback."
+)
+async def get_issue_tool_handler(issue_id: str, org_name: Optional[str] = None, project_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    Handles requests for the 'spacebridge://api/v1/issues/{issue_id}' resource.
+    Handles requests for retrieving a specific issue by issue_id from SpaceBridge.
     """
-    logger.info(f"Received resource request for URI: spacebridge://api/v1/issues/{issue_id}")
+    logger.info(f"Received tool request for get_issue: {issue_id}")
     try:
         # Use the globally initialized client
         issue_data = spacebridge_client.get_issue(issue_id)
 
         # Return the raw issue data dictionary
-        # FastMCP should handle wrapping this into the appropriate response
-        logger.info(f"Successfully retrieved resource data for {issue_id}")
+        logger.info(f"Successfully retrieved issue data for {issue_id}")
         return issue_data
     except Exception as e:
-        logger.error(f"Error processing resource request for {issue_id}: {e}", exc_info=True)
-        # TODO: Raise a specific FastMCP exception? For now, let FastMCP handle it.
+        logger.error(f"Error processing tool request for {issue_id}: {e}", exc_info=True)
         raise
-
-# --- Define Tool Handlers ---
 
 @app.tool(
     name="search_issues",
@@ -188,7 +188,8 @@ async def create_issue_handler(
     title: str,
     description: str,
     org_name: Optional[str] = None,      # Added optional param
-    project_name: Optional[str] = None   # Added optional param
+    project_name: Optional[str] = None,  # Added optional param
+    labels: Optional[List[str]] = None   # Added labels param
 ) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
@@ -198,8 +199,8 @@ async def create_issue_handler(
     logger.info(f"Executing tool 'create_issue' for title: '{title}', org: {org_name}, project: {project_name}")
     try:
         # Determine final context (Startup context takes priority)
-        final_org_name = spacebridge_client.org_name if spacebridge_client.org_name is not None else org_name
-        final_project_name = spacebridge_client.project_name if spacebridge_client.project_name is not None else project_name
+        final_org_name = org_name or spacebridge_client.org_name
+        final_project_name = project_name or spacebridge_client.project_name
         logger.debug(f"Create using context: Org='{final_org_name}', Project='{final_project_name}'")
 
         combined_text = f"{title}\n\n{description}"
@@ -294,7 +295,8 @@ Respond with ONLY one of the following:
                 title=title,
                 description=description,
                 org_name=final_org_name,
-                project_name=final_project_name
+                project_name=final_project_name,
+                labels=labels # Pass labels to the client method
             )
             output_data = CreateIssueOutput(
                 issue_id=created_issue_data.get("id", "UNKNOWN"),
