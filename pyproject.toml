@@ -42,5 +42,6 @@ dev = [
     "pytest-asyncio>=0.20.0", # For testing async functions
     "respx>=0.20.0",          # For mocking HTTP requests (requests library)
     "httpx>=0.23.0",          # Required by respx and openai
-    # "flake8",               # Optional: Add linters if desired
+    "pre-commit>=4.2.0",
+    "ruff>=0.11.3",
 ]
