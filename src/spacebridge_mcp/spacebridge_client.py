@@ -123,7 +123,8 @@ class SpaceBridgeClient:
         title: str,
         description: str,
         org_name: Optional[str] = None,      # Added optional param
-        project_name: Optional[str] = None   # Added optional param
+        project_name: Optional[str] = None,  # Added optional param
+        labels: Optional[List[str]] = None   # Added labels param
     ) -> Dict[str, Any]:
         """
         Creates a new issue.
@@ -141,6 +142,10 @@ class SpaceBridgeClient:
             payload["organization"] = final_org_name
         if final_project_name:
             payload["project"] = final_project_name
+
+        # Add labels to payload if provided
+        if labels:
+            payload["labels"] = labels
 
         # Pass json payload directly to httpx request
         logger.info(f"Creating issue with payload: {payload}")

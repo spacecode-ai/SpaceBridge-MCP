@@ -188,7 +188,8 @@ async def create_issue_handler(
     title: str,
     description: str,
     org_name: Optional[str] = None,      # Added optional param
-    project_name: Optional[str] = None   # Added optional param
+    project_name: Optional[str] = None,  # Added optional param
+    labels: Optional[List[str]] = None   # Added labels param
 ) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
@@ -294,7 +295,8 @@ Respond with ONLY one of the following:
                 title=title,
                 description=description,
                 org_name=final_org_name,
-                project_name=final_project_name
+                project_name=final_project_name,
+                labels=labels # Pass labels to the client method
             )
             output_data = CreateIssueOutput(
                 issue_id=created_issue_data.get("id", "UNKNOWN"),
