@@ -199,8 +199,8 @@ async def create_issue_handler(
     logger.info(f"Executing tool 'create_issue' for title: '{title}', org: {org_name}, project: {project_name}")
     try:
         # Determine final context (Startup context takes priority)
-        final_org_name = spacebridge_client.org_name if spacebridge_client.org_name is not None else org_name
-        final_project_name = spacebridge_client.project_name if spacebridge_client.project_name is not None else project_name
+        final_org_name = org_name or spacebridge_client.org_name
+        final_project_name = project_name or spacebridge_client.project_name
         logger.debug(f"Create using context: Org='{final_org_name}', Project='{final_project_name}'")
 
         combined_text = f"{title}\n\n{description}"
