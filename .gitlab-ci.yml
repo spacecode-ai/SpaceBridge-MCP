@@ -1,0 +1,56 @@
+image: alpine:3.15
+
+variables:
+  CI_REGISTRY_IMAGE: $CI_REGISTRY/spacecode/spacebridge-mcp
+  GIT_SUBMODULE_STRATEGY: "recursive"
+  GITLAB_TOKEN: $GITLAB_TOKEN
+
+
+cache:
+  paths:
+    - .pip-cache/
+
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64)\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor
+      --context $CI_PROJECT_DIR
+      --dockerfile $CI_PROJECT_DIR/Dockerfile
+      --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+      --destination $CI_REGISTRY_IMAGE:latest
+      --registry-mirror registry.spacecode.ai
+      --registry-mirror $CI_REGISTRY
+      --build-arg GITLAB_TOKEN=$GITLAB_TOKEN
+
+pre-commit:
+  stage: test
+  needs: []
+  image: python:3.11-slim
+  before_script:
+    - apt-get update && apt-get install -y git
+    - pip install -U pip pre-commit ruff
+  script:
+    - pre-commit install
+    - ruff check
+    - pre-commit run --all-files
+
+pytest:
+  stage: test
+  needs: []
+  image: python:3.11-slim
+  before_script:
+    - pip install -U pip
+    - pip install pytest pytest-cov loguru
+    - pip install -e ".[dev]"
+
+  script:
+    - pytest -vvv
