@@ -117,28 +117,28 @@ app = FastMCP(
     # Pass settings directly if needed, e.g., log_level="DEBUG"
 )
 
-# --- Define Resource Handlers ---
+# --- Define Tool Handlers ---
 
-@app.resource("spacebridge://api/v1/issues/{issue_id}")
-async def get_issue_resource_handler(issue_id: str) -> Dict[str, Any]: # Return dict directly
+# TODO: Change this back to an MCP resource handler when there is wider client support for MCP resources.
+@app.tool(
+    name="get_issue",
+    description="Retrieves a specific issue by issue_id from SpaceBridge. Optionally accepts org/project context as fallback."
+)
+async def get_issue_tool_handler(issue_id: str, org_name: Optional[str] = None, project_name: Optional[str] = None) -> Dict[str, Any]:
     """
-    Handles requests for the 'spacebridge://api/v1/issues/{issue_id}' resource.
+    Handles requests for retrieving a specific issue by issue_id from SpaceBridge.
     """
-    logger.info(f"Received resource request for URI: spacebridge://api/v1/issues/{issue_id}")
+    logger.info(f"Received tool request for get_issue: {issue_id}")
     try:
         # Use the globally initialized client
         issue_data = spacebridge_client.get_issue(issue_id)
 
         # Return the raw issue data dictionary
-        # FastMCP should handle wrapping this into the appropriate response
-        logger.info(f"Successfully retrieved resource data for {issue_id}")
+        logger.info(f"Successfully retrieved issue data for {issue_id}")
         return issue_data
     except Exception as e:
-        logger.error(f"Error processing resource request for {issue_id}: {e}", exc_info=True)
-        # TODO: Raise a specific FastMCP exception? For now, let FastMCP handle it.
+        logger.error(f"Error processing tool request for {issue_id}: {e}", exc_info=True)
         raise
-
-# --- Define Tool Handlers ---
 
 @app.tool(
     name="search_issues",

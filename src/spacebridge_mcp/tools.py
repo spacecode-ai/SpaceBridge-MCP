@@ -1,4 +1,4 @@
-# src/spacebridge_mcp/tools.py
+ # src/spacebridge_mcp/tools.py
 """
 MCP Tool definitions for SpaceBridge integration.
 """
@@ -54,6 +54,10 @@ class CreateIssueInput(BaseModel):
     project_name: Optional[str] = Field(
         None,
         description="Optional: Override the server's detected/configured project context."
+    )
+    labels: Optional[List[str]] = Field(
+        None,
+        description="Optional: A list of labels to apply to the new issue."
     )
 
 class CreateIssueOutput(BaseModel):
