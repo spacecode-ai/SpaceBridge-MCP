@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "spacebridge-mcp"
 version = "0.2.0" # Match version in server.py
 authors = [
-  { name="Your Name", email="your.email@example.com" }, # TODO: Update with actual author info
+  { name="Spacecode AI Inc", email="hello@spacecode.ai" },
 ]
-description = "MCP Server for interacting with SpaceBridge issue tracking."
+description = "SpaceBridge MCP Server for issue tracker automation."
 readme = "README.md"
 requires-python = ">=3.9"
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License", # TODO: Choose appropriate license
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Communications",
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     # Install mcp-sdk directly from GitHub as it might not be on PyPI
     # Install mcp directly from GitHub as it might not be on PyPI, and its package name is 'mcp'
-    "mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git#egg=mcp",
+    "mcp[cli]>=1.6.0",
     "requests>=2.20.0",
     "openai>=1.0.0",
     "python-dotenv>=0.19.0", # For loading .env files
@@ -30,8 +30,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/your-username/spacebridge-mcp" # TODO: Update with actual repo URL
-"Bug Tracker" = "https://github.com/your-username/spacebridge-mcp/issues" # TODO: Update
+"Homepage" = "https://github.com/spacecode-ai/SpaceBridge-MCP"
+"Bug Tracker" = "https://github.com/spacecode-ai/SpaceBridge-MCP/issues"
+"Documentation" = "https://spacebridge.io/docs"
 
 [project.scripts]
 spacebridge-mcp-server = "spacebridge_mcp.server:main_sync" # Define the entry point

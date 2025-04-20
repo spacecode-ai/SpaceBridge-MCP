@@ -189,4 +189,4 @@ Refer to the specific documentation for your client. The general principle is th
 
 ## License
 
-*(License information - e.g., MIT, Apache 2.0 - TODO)*
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
