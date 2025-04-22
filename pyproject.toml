@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spacebridge-mcp"
-version = "0.2.1" # Match version in server.py
+version = "0.2.2" # Match version in server.py
 authors = [
   { name="Spacecode AI Inc", email="hello@spacecode.ai" },
 ]

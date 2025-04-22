@@ -126,7 +126,7 @@ def test_search_issues_success(client: SpaceBridgeClient, client_config, call_co
         call_org_name = call_context.get("org")
         call_project_name = call_context.get("project")
 
-    expected_params = {"query": query, "type": search_type}
+    expected_params = {"query": query, "search_type": search_type}
     if final_org:
         expected_params["organization"] = final_org
     if final_project:
@@ -195,7 +195,7 @@ def test_search_issues_similarity_success(
         call_org_name = call_context.get("org")
         call_project_name = call_context.get("project")
 
-    expected_params = {"query": query, "type": search_type}
+    expected_params = {"query": query, "search_type": search_type}
     if final_org:
         expected_params["organization"] = final_org
     if final_project:
