@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add CHANGELOG.md to track changes.
 
 ### Fixed
-- Default to https://spacebridge.io for SpaceBridge API URL.
+- Default to https://spacebridge.io for SpaceBridge API URL if not set via environment or arguments.
+- Require `SPACEBRIDGE_API_KEY` and `OPENAI_API_KEY` for server startup.
 
 ## [0.2.0] - 2025-04-21
 

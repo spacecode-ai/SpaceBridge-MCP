@@ -308,11 +308,15 @@ def test_create_issue_success(client: SpaceBridgeClient, client_config, call_con
 
 
 def test_client_init_missing_url(monkeypatch):
-    """Test client initialization fails if URL is missing."""
+    """Test client initialization uses default URL if env var is missing."""
+    default_url = (
+        "https://spacebridge.io/api/v1"  # Expected default after client processing
+    )
     monkeypatch.delenv("SPACEBRIDGE_API_URL", raising=False)
     monkeypatch.setenv("SPACEBRIDGE_API_KEY", MOCK_API_KEY)
-    with pytest.raises(ValueError, match="API URL not configured"):
-        SpaceBridgeClient()
+    # Client should initialize successfully using the default URL
+    client = SpaceBridgeClient()
+    assert client.api_url == default_url
 
 
 def test_client_init_missing_key(monkeypatch):
