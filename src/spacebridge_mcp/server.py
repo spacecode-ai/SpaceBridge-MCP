@@ -538,14 +538,15 @@ def main_sync():
 
     # 4. Validate required configuration
     missing_config = []
-    if not final_api_url:
-        missing_config.append("SpaceBridge API URL")
+
     if not final_api_key:
+        # API Key IS required for startup.
         missing_config.append("SpaceBridge API Key")
     if not final_openai_key:
+        # OpenAI Key IS required for startup (for duplicate detection).
         missing_config.append("OpenAI API Key")
 
-    if missing_config:
+    if missing_config:  # Check if the list contains required missing items.
         error_message = (
             f"Missing required configuration: {', '.join(missing_config)}. "
             "Please provide via command-line arguments, environment variables, or a .env file."

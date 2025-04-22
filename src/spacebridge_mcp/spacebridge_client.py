@@ -34,20 +34,20 @@ class SpaceBridgeClient:
             org_name: The organization name, potentially extracted from Git config.
             project_name: The project name, potentially extracted from Git config.
         """
-        self.api_url = api_url or os.getenv("SPACEBRIDGE_API_URL")
+        self.api_url = api_url or os.getenv(
+            "SPACEBRIDGE_API_URL", "https://spacebridge.io"
+        )
         self.api_key = api_key or os.getenv("SPACEBRIDGE_API_KEY")
         self.org_name = org_name
         self.project_name = project_name
 
-        if not self.api_url:
-            raise ValueError(
-                "SpaceBridge API URL not configured. Set SPACEBRIDGE_API_URL environment variable."
-            )
+        # API Key is required. Raise error if missing.
         if not self.api_key:
             raise ValueError(
                 "SpaceBridge API Key not configured. Set SPACEBRIDGE_API_KEY environment variable."
             )
 
+        # Initialize headers (API key is guaranteed to exist here)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
