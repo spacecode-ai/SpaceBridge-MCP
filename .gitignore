@@ -5,3 +5,6 @@
 **/__pycache__
 **/*.pyc
 repomix-output.xml
+
+# Build artifacts
+dist/

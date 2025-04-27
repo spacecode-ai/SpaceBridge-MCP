@@ -96,16 +96,16 @@ class SpaceBridgeClient:
     def search_issues(
         self,
         query: str,
-        search_type: str = "full_text",
+        search_type: str = "similarity",
         org_name: Optional[str] = None,  # Added optional param
         project_name: Optional[str] = None,  # Added optional param
     ) -> List[Dict[str, Any]]:
         """
         Searches for issues using full-text or similarity search.
         Uses provided org/project context if available, otherwise falls back to client's startup context.
-        Corresponds to: GET /api/v1/issues/search?query={query}&type={search_type}
+        Corresponds to: GET /api/v1/issues/search?query={query}&search_type={search_type}
         """
-        params = {"query": query, "type": search_type}
+        params = {"query": query, "search_type": search_type}
 
         # Determine context to use (passed arg takes precedence over startup context)
         final_org_name = org_name if org_name is not None else self.org_name

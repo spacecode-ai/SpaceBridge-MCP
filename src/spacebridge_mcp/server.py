@@ -140,7 +140,7 @@ app = FastMCP(
 # TODO: Change this back to an MCP resource handler when there is wider client support for MCP resources.
 @app.tool(
     name="get_issue",
-    description="Retrieves a specific issue by issue_id from SpaceBridge. Optionally accepts org/project context as fallback.",
+    description="Retrieves a specific issue by issue_id from SpaceBridge. Always define project_name. Define org_name if known.",
 )
 async def get_issue_tool_handler(
     issue_id: str, org_name: Optional[str] = None, project_name: Optional[str] = None
@@ -165,11 +165,11 @@ async def get_issue_tool_handler(
 
 @app.tool(
     name="search_issues",
-    description="Searches for issues in SpaceBridge. Optionally accepts org/project context as fallback.",
+    description="Searches for issues in SpaceBridge. Always define project_name. Define org_name if known. Use similarity search for best results.",
 )
 async def search_issues_handler(
     query: str,
-    search_type: Literal["full_text", "similarity"] = "full_text",
+    search_type: Literal["full_text", "similarity"] = "similarity",
     org_name: Optional[str] = None,  # Added optional param
     project_name: Optional[str] = None,  # Added optional param
 ) -> SearchIssuesOutput:
@@ -218,7 +218,7 @@ async def search_issues_handler(
 
 @app.tool(
     name="create_issue",
-    description="Creates a new issue in SpaceBridge, checking for duplicates. Optionally accepts org/project context as fallback. Issue title and description should ALWAYS be in present tense.",
+    description="Creates a new issue in SpaceBridge, checking for duplicates. Always define project_name. Define org_name if known. Issue title and description should ALWAYS be in present tense.",
 )
 async def create_issue_handler(
     title: str,
@@ -391,7 +391,7 @@ Respond with ONLY one of the following:
 
 @app.tool(
     name="update_issue",
-    description="Updates an existing issue in SpaceBridge. Optionally accepts org/project context as fallback.",
+    description="Updates an existing issue in SpaceBridge. Always define project_name. Define org_name if known.",
 )
 async def update_issue_handler(
     issue_id: str,
