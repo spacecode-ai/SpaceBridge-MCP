@@ -73,13 +73,13 @@ class CreateIssueInput(BaseModel):
 
 
 class CreateIssueOutput(BaseModel):
-    issue_id: str = Field(
-        ...,
-        description="The ID of the created or potentially duplicate existing issue.",
+    issue_id: Optional[str] = Field(
+        None,
+        description="The ID of the created or potentially duplicate existing issue. Can be None if undetermined initially.",
     )
-    status: Literal["created", "existing_duplicate_found"] = Field(
+    status: Literal["created", "existing_duplicate_found", "undetermined"] = Field(
         ...,
-        description="Indicates if a new issue was created or a duplicate was found.",
+        description="Indicates if a new issue was created, a duplicate was found, or the check was undetermined.",
     )
     message: str = Field(..., description="A message describing the outcome.")
     url: Optional[str] = Field(
