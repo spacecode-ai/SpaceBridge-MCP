@@ -260,7 +260,9 @@ async def create_issue_handler(
             )
             # Ensure raw data is converted to IssueSummary objects
             potential_duplicates = [
-                IssueSummary(**dup) for dup in potential_duplicates_raw if isinstance(dup, dict)
+                IssueSummary(**dup)
+                for dup in potential_duplicates_raw
+                if isinstance(dup, dict)
             ]
             logger.info(f"Found {len(potential_duplicates)} potential duplicates.")
         except Exception as search_error:
@@ -305,13 +307,16 @@ async def create_issue_handler(
                     message=f"Duplicate detection determined this is a likely duplicate of issue {dup_issue.id}.",
                     url=dup_issue.url,
                 )
-                logger.info(f"Tool 'create_issue' completed (found duplicate: {dup_issue.id}).")
+                logger.info(
+                    f"Tool 'create_issue' completed (found duplicate: {dup_issue.id})."
+                )
             else:
                 # This case indicates an internal logic error in the detector
-                 logger.error("Duplicate status returned without duplicate issue details. Proceeding with creation.")
-                 # Fallback to creating a new issue by setting output_data back to None
-                 output_data = None # Force creation block to run
-
+                logger.error(
+                    "Duplicate status returned without duplicate issue details. Proceeding with creation."
+                )
+                # Fallback to creating a new issue by setting output_data back to None
+                output_data = None  # Force creation block to run
 
         # Create issue if:
         # - No potential duplicates were found initially
@@ -320,8 +325,14 @@ async def create_issue_handler(
         # - Duplicate detector decided 'not_duplicate'
         # - Duplicate detector decided 'undetermined'
         # - Duplicate detector decided 'duplicate' but failed to provide details (handled above)
-        if output_data is None: # Checks if output_data wasn't set in the duplicate block
-            action = "Creating new issue" if not duplicate_decision else f"Creating new issue (detector status: {duplicate_decision.status})"
+        if (
+            output_data is None
+        ):  # Checks if output_data wasn't set in the duplicate block
+            action = (
+                "Creating new issue"
+                if not duplicate_decision
+                else f"Creating new issue (detector status: {duplicate_decision.status})"
+            )
             logger.info(f"{action}...")
             try:
                 created_issue_data = spacebridge_client.create_issue(
@@ -340,18 +351,25 @@ async def create_issue_handler(
                     message="Successfully created new issue.",
                     url=created_url,
                 )
-                logger.info(f"Tool 'create_issue' completed (created new issue: {created_id}).")
+                logger.info(
+                    f"Tool 'create_issue' completed (created new issue: {created_id})."
+                )
             except Exception as create_error:
-                 logger.error(f"Failed to create issue after duplicate check: {create_error}", exc_info=True)
-                 # Re-raising seems appropriate for FastMCP handler.
-                 raise create_error
+                logger.error(
+                    f"Failed to create issue after duplicate check: {create_error}",
+                    exc_info=True,
+                )
+                # Re-raising seems appropriate for FastMCP handler.
+                raise create_error
 
         return output_data
 
     except Exception as e:
         # Log the error before re-raising to ensure it's captured
-        logger.error(f"Unhandled error executing tool 'create_issue': {e}", exc_info=True)
-        raise # Let FastMCP handle the final error reporting
+        logger.error(
+            f"Unhandled error executing tool 'create_issue': {e}", exc_info=True
+        )
+        raise  # Let FastMCP handle the final error reporting
 
 
 @app.tool(

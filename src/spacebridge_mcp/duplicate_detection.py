@@ -9,14 +9,16 @@ from .tools import IssueSummary
 
 logger = logging.getLogger(__name__)
 
+
 # Decision structure returned by detectors
 @dataclass
 class DuplicateDecision:
     status: Literal["duplicate", "not_duplicate", "undetermined"]
-    duplicate_issue: Optional[IssueSummary] = None # Include full details if duplicate
+    duplicate_issue: Optional[IssueSummary] = None  # Include full details if duplicate
 
 
 # --- Abstract Base Class ---
+
 
 class DuplicateDetector(ABC):
     """Abstract base class for duplicate issue detection strategies."""
@@ -44,12 +46,15 @@ class DuplicateDetector(ABC):
 
 # --- Concrete Implementations ---
 
+
 class OpenAIDuplicateDetector(DuplicateDetector):
     """Uses OpenAI's LLM to compare potential duplicates."""
 
     def __init__(self, client):
         if client is None:
-            raise ValueError("OpenAI client must be provided for OpenAIDuplicateDetector")
+            raise ValueError(
+                "OpenAI client must be provided for OpenAIDuplicateDetector"
+            )
         self.openai_client = client
 
     async def check_duplicates(
@@ -62,7 +67,7 @@ class OpenAIDuplicateDetector(DuplicateDetector):
         if not potential_duplicates:
             return DuplicateDecision(status="not_duplicate")
 
-        top_n = 3 # Consider making this configurable
+        top_n = 3  # Consider making this configurable
         duplicates_to_check = potential_duplicates[:top_n]
         duplicates_context = "\n\n".join(
             [
@@ -96,7 +101,7 @@ Respond with ONLY one of the following:
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=50, # Increased slightly for safety
+                max_tokens=50,  # Increased slightly for safety
             )
             llm_decision_raw = llm_response.choices[0].message.content.strip()
             logger.info(f"LLM response received: '{llm_decision_raw}'")
@@ -160,7 +165,9 @@ class DummyDuplicateDetector(DuplicateDetector):
         # If there are potential duplicates, we can't be sure without a real check
         return DuplicateDecision(status="undetermined")
 
+
 # --- Factory ---
+
 
 class DuplicateDetectorFactory:
     """Factory to create the appropriate duplicate detector based on config."""
@@ -182,7 +189,9 @@ class DuplicateDetectorFactory:
                 return OpenAIDuplicateDetector(client=self.openai_client)
             else:
                 # Log warning but still proceed with Dummy if client is missing
-                logger.warning("OpenAI API key found, but no OpenAI client provided to factory. Falling back to DummyDetector.")
+                logger.warning(
+                    "OpenAI API key found, but no OpenAI client provided to factory. Falling back to DummyDetector."
+                )
                 return DummyDuplicateDetector()
         else:
             logger.info("OpenAI API key not found. Using DummyDuplicateDetector.")
