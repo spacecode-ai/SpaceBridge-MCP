@@ -148,8 +148,34 @@ Respond with ONLY one of the following:
             return DuplicateDecision(status="undetermined")
 
 
-class DummyDuplicateDetector(DuplicateDetector):
-    """A simple detector that always returns 'undetermined'."""
+class ThresholdDuplicateDetector(DuplicateDetector):
+    """Compares the top similarity search result score against a threshold."""
+
+    DEFAULT_THRESHOLD = 0.75  # Default threshold if env var is not set
+
+    def __init__(self):
+        self.threshold = self._get_threshold()
+        logger.info(
+            f"Initialized ThresholdDuplicateDetector with threshold: {self.threshold}"
+        )
+
+    def _get_threshold(self) -> float:
+        """Gets the similarity threshold from env var or uses default."""
+        try:
+            threshold_str = os.environ.get("DUPLICATE_SIMILARITY_THRESHOLD")
+            if threshold_str:
+                return float(threshold_str)
+            else:
+                logger.info(
+                    f"DUPLICATE_SIMILARITY_THRESHOLD not set, using default: {self.DEFAULT_THRESHOLD}"
+                )
+                return self.DEFAULT_THRESHOLD
+        except ValueError:
+            logger.warning(
+                f"Invalid value for DUPLICATE_SIMILARITY_THRESHOLD: '{threshold_str}'. "
+                f"Using default: {self.DEFAULT_THRESHOLD}"
+            )
+            return self.DEFAULT_THRESHOLD
 
     async def check_duplicates(
         self,
@@ -157,13 +183,36 @@ class DummyDuplicateDetector(DuplicateDetector):
         new_description: str,
         potential_duplicates: List[IssueSummary],
     ) -> DuplicateDecision:
-        """Always returns undetermined if potential duplicates exist."""
-        logger.info("Using DummyDuplicateDetector: skipping advanced duplicate check.")
+        """Checks if the top duplicate's score meets the threshold."""
         if not potential_duplicates:
-            # If search found nothing, it's definitely not a duplicate
+            logger.debug("ThresholdDetector: No potential duplicates found.")
             return DuplicateDecision(status="not_duplicate")
-        # If there are potential duplicates, we can't be sure without a real check
-        return DuplicateDecision(status="undetermined")
+
+        # Assuming potential_duplicates are sorted by score descending by the search client
+        top_duplicate = potential_duplicates[0]
+
+        # Check if the IssueSummary actually has a score
+        if top_duplicate.score is None:
+            logger.warning(
+                f"ThresholdDetector: Top potential duplicate {top_duplicate.id} has no similarity score. Treating as undetermined."
+            )
+            # Cannot make a decision based on threshold without a score
+            return DuplicateDecision(status="undetermined")
+
+        logger.debug(
+            f"ThresholdDetector: Top duplicate {top_duplicate.id} score: {top_duplicate.score:.4f}, Threshold: {self.threshold:.4f}"
+        )
+
+        if top_duplicate.score >= self.threshold:
+            logger.info(
+                f"ThresholdDetector: Score {top_duplicate.score:.4f} >= {self.threshold:.4f}. Found duplicate: {top_duplicate.id}"
+            )
+            return DuplicateDecision(status="duplicate", duplicate_issue=top_duplicate)
+        else:
+            logger.info(
+                f"ThresholdDetector: Score {top_duplicate.score:.4f} < {self.threshold:.4f}. Not a duplicate."
+            )
+            return DuplicateDecision(status="not_duplicate")
 
 
 # --- Factory ---
@@ -188,11 +237,11 @@ class DuplicateDetectorFactory:
                 logger.info("OpenAI API key found. Using OpenAIDuplicateDetector.")
                 return OpenAIDuplicateDetector(client=self.openai_client)
             else:
-                # Log warning but still proceed with Dummy if client is missing
+                # Log warning but still proceed with ThresholdDetector if client is missing
                 logger.warning(
-                    "OpenAI API key found, but no OpenAI client provided to factory. Falling back to DummyDetector."
+                    "OpenAI API key found, but no OpenAI client provided to factory. Falling back to ThresholdDetector."
                 )
-                return DummyDuplicateDetector()
+                return ThresholdDuplicateDetector()
         else:
-            logger.info("OpenAI API key not found. Using DummyDuplicateDetector.")
-            return DummyDuplicateDetector()
+            logger.info("OpenAI API key not found. Using ThresholdDuplicateDetector.")
+            return ThresholdDuplicateDetector()
