@@ -608,10 +608,10 @@ def main_sync():
         logger.info("Initializing OpenAI Client...")
         # Prepare OpenAI client parameters
         openai_params = {"api_key": final_openai_key}
-        openai_api_url = os.environ.get("OPENAI_API_URL")
-        if openai_api_url:
-            logger.info(f"Using custom OpenAI API URL: {openai_api_url}")
-            openai_params["base_url"] = openai_api_url
+        openai_api_base = os.environ.get("OPENAI_API_BASE")
+        if openai_api_base:
+            logger.info(f"Using custom OpenAI API URL: {openai_api_base}")
+            openai_params["base_url"] = openai_api_base
 
         openai_client = openai.AsyncOpenAI(**openai_params)
         logger.info("Clients initialized successfully.")

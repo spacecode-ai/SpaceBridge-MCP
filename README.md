@@ -77,7 +77,7 @@ The server requires the following configuration values:
 *   **Optional (Duplicate Detection Behavior):**
     *   `OPENAI_API_KEY`: Your OpenAI API key. *Required* if you want to use OpenAI for duplicate checking. If not provided, the server falls back to threshold-based checking.
     *   `DUPLICATE_SIMILARITY_THRESHOLD`: Sets the similarity score threshold (0.0 to 1.0) used for duplicate detection when `OPENAI_API_KEY` is *not* provided. (Default: `0.75`).
-    *   `OPENAI_API_URL`: Specifies a custom base URL for the OpenAI API (e.g., for local models or other providers). (Used only if `OPENAI_API_KEY` is set).
+    *   `OPENAI_API_BASE`: Specifies a custom base URL for the OpenAI API (e.g., for local models or other providers). (Used only if `OPENAI_API_KEY` is set).
     *   `OPENAI_MODEL`: Specifies the OpenAI model name to use for duplicate checks. (Default: `gpt-4o`). (Used only if `OPENAI_API_KEY` is set).
 
 These values, along with organization/project context, can be provided in multiple ways. The server determines the final values based on the following order of precedence (highest first):
