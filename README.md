@@ -68,9 +68,17 @@ The server exposes MCP tools and resources that translate natural language reque
 
 The server requires the following configuration values:
 
-*   **SpaceBridge API URL:** The base URL for your SpaceBridge API instance (e.g., `https://your-spacebridge.com/api/v1`).
-*   **SpaceBridge API Key:** Your API key for authenticating with SpaceBridge.
-*   **OpenAI API Key:** Your API key for OpenAI, used by the `create_issue` tool for duplicate checking.
+*   **Required:**
+    *   `SPACEBRIDGE_API_KEY`: Your API key for authenticating with SpaceBridge.
+*   **Optional (Configuration & Context):**
+    *   `SPACEBRIDGE_API_URL`: Base URL for your SpaceBridge API instance (e.g., `https://your-spacebridge.com/api/v1`). (Required if not set via other methods).
+    *   `SPACEBRIDGE_ORG_NAME`: Explicitly sets the organization context. (Optional).
+    *   `SPACEBRIDGE_PROJECT_NAME`: Explicitly sets the project context. (Optional).
+*   **Optional (Duplicate Detection Behavior):**
+    *   `OPENAI_API_KEY`: Your OpenAI API key. *Required* if you want to use OpenAI for duplicate checking. If not provided, the server falls back to threshold-based checking.
+    *   `DUPLICATE_SIMILARITY_THRESHOLD`: Sets the similarity score threshold (0.0 to 1.0) used for duplicate detection when `OPENAI_API_KEY` is *not* provided. (Default: `0.75`).
+    *   `OPENAI_API_URL`: Specifies a custom base URL for the OpenAI API (e.g., for local models or other providers). (Used only if `OPENAI_API_KEY` is set).
+    *   `OPENAI_MODEL`: Specifies the OpenAI model name to use for duplicate checks. (Default: `gpt-4o`). (Used only if `OPENAI_API_KEY` is set).
 
 These values, along with organization/project context, can be provided in multiple ways. The server determines the final values based on the following order of precedence (highest first):
 
@@ -88,11 +96,12 @@ These values, along with organization/project context, can be provided in multip
 
 2.  **Environment Variables:** Set standard environment variables. These override `.env` files and Git detection.
     ```bash
-    export SPACEBRIDGE_API_URL="YOUR_URL"
+    # Example setting required and some optional vars
     export SPACEBRIDGE_API_KEY="YOUR_SB_KEY"
-    export OPENAI_API_KEY="YOUR_OPENAI_KEY"
-    export SPACEBRIDGE_ORG_NAME="YOUR_ORG"        # Explicit Org Name
-    export SPACEBRIDGE_PROJECT_NAME="YOUR_PROJECT"  # Explicit Project Name
+    export SPACEBRIDGE_API_URL="YOUR_URL" # Often needed
+    export OPENAI_API_KEY="YOUR_OPENAI_KEY" # If using OpenAI duplicate check
+    export SPACEBRIDGE_ORG_NAME="YOUR_ORG"
+    export SPACEBRIDGE_PROJECT_NAME="YOUR_PROJECT"
     # Then run:
     spacebridge-mcp-server
     ```
@@ -147,11 +156,8 @@ This server uses standard input/output (stdio) for communication. You need to co
 claude mcp add spacebridge \
   /full/path/to/your/spacebridge-mcp-server \
   --scope user \
-  --env SPACEBRIDGE_API_URL="https://your-spacebridge.com/api" \
   --env SPACEBRIDGE_API_KEY="your-spacebridge-api-key" \
   --env OPENAI_API_KEY="your-openai-api-key" \
-  --env SPACEBRIDGE_ORG_NAME="your-explicit-org" \      # Add this if needed
-  --env SPACEBRIDGE_PROJECT_NAME="your-explicit-project" # Add this if needed
 ```
 
 *   Replace `/full/path/to/your/spacebridge-mcp-server` with the actual path found in step 2.
@@ -185,7 +191,58 @@ Refer to the specific documentation for your client. The general principle is th
 
 ## Contributing
 
-*(Contribution guidelines - TODO)*
+Contributions are welcome! Please follow these steps:
+
+1.  **Find an Issue or Suggest an Idea:**
+    *   Check the [GitHub Issues](https://github.com/spacecode-ai/SpaceBridge-MCP/issues) to see if your issue or idea is already being tracked.
+    *   If not, open a new issue to discuss your proposed change or report a bug.
+
+2.  **Fork the Repository:** Create your own fork of the project on GitHub.
+
+3.  **Create a Branch:** Create a new branch in your fork for your changes:
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+
+4.  **Set Up Development Environment:**
+    *   Ensure you have Python 3.8+ installed.
+    *   Create and activate a virtual environment (e.g., using `venv`):
+        ```bash
+        python -m venv .venv
+        source .venv/bin/activate  # Linux/macOS
+        # .\.venv\Scripts\activate # Windows
+        ```
+    *   Install the project with development dependencies:
+        ```bash
+        python -m pip install -e ".[dev]"
+        ```
+
+5.  **Make Your Changes:** Implement your feature or bug fix.
+
+6.  **Run Tests:** Ensure all tests pass:
+    ```bash
+    python -m pytest -vvv
+    ```
+
+7.  **Lint and Format:** Ensure code style consistency (assuming Ruff is used, adjust if needed):
+    ```bash
+    ruff check . --fix
+    ruff format .
+    ```
+
+8.  **Commit Your Changes:** Commit your changes with a clear and descriptive message.
+    ```bash
+    git commit -m "feat: Add feature X" # Or fix:, chore:, etc.
+    ```
+
+9.  **Push to Your Fork:**
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+
+10. **Open a Pull Request:** Go to the original repository on GitHub and open a Pull Request from your fork's branch to the `main` branch of the original repository. Provide a clear description of your changes in the PR.
+
+11. **Code Review:** Wait for maintainers to review your PR. Address any feedback provided.
 
 ## License
 
