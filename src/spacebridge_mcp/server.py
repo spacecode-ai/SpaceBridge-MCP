@@ -141,65 +141,76 @@ app = FastMCP(
 # TODO: Change this back to an MCP resource handler when there is wider client support for MCP resources.
 @app.tool(
     name="get_issue",
-    description="Retrieves a specific issue by issue_id from SpaceBridge. Always define project_name. Define org_name if known.",
+    description="Retrieves a specific issue by key, id or external id from SpaceBridge. Define project slug only if not part of issue key.",
 )
 async def get_issue_tool_handler(
-    issue_id: str, org_name: Optional[str] = None, project_name: Optional[str] = None
+    issue: str, org_name: Optional[str] = None, project: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Handles requests for retrieving a specific issue by issue_id from SpaceBridge.
+    Handles requests for retrieving a specific issue by its ID/key from SpaceBridge.
     """
-    logger.info(f"Received tool request for get_issue: {issue_id}")
+    logger.info(f"Received tool request for get_issue: {issue}")
     try:
         # Use the globally initialized client
-        issue_data = spacebridge_client.get_issue(issue_id)
+        # The client method might still use org_name/project_name for context if needed internally
+        issue_data = spacebridge_client.get_issue(
+            issue, org_name=org_name, project_name=project
+        )
 
         # Return the raw issue data dictionary
-        logger.info(f"Successfully retrieved issue data for {issue_id}")
+        logger.info(f"Successfully retrieved issue data for {issue}")
         return issue_data
     except Exception as e:
-        logger.error(
-            f"Error processing tool request for {issue_id}: {e}", exc_info=True
-        )
+        logger.error(f"Error processing tool request for {issue}: {e}", exc_info=True)
         raise
 
 
 @app.tool(
     name="search_issues",
-    description="Searches for issues in SpaceBridge. Always define project_name. Define org_name if known. Use similarity search for best results.",
+    description="Searches for issues in SpaceBridge. Always define project slug. Use similarity search for best results.",
 )
 async def search_issues_handler(
     query: str,
     search_type: Literal["full_text", "similarity"] = "similarity",
-    org_name: Optional[str] = None,  # Added optional param
-    project_name: Optional[str] = None,  # Added optional param
+    org: Optional[str] = None,
+    project: Optional[str] = None,
+    status: Optional[str] = None,  # Added filter
+    labels: Optional[str] = None,  # Added filter (comma-separated string)
+    assignee: Optional[str] = None,  # Added filter
+    priority: Optional[str] = None,  # Added filter
 ) -> SearchIssuesOutput:
     """Implements the 'search_issues' tool using FastMCP."""
     logger.info(
-        f"Executing tool 'search_issues' with query: '{query}', type: {search_type}, org: {org_name}, project: {project_name}"
+        f"Executing tool 'search_issues' with query: '{query}', type: {search_type}, "
+        f"org: {org}, project: {project}, status: {status}, labels: {labels}, "
+        f"assignee: {assignee}, priority: {priority}"
     )
     try:
         # Determine final context (Startup context takes priority)
-        final_org_name = (
+        final_org = (
             spacebridge_client.org_name
             if spacebridge_client.org_name is not None
-            else org_name
+            else org
         )
-        final_project_name = (
+        final_project = (
             spacebridge_client.project_name
             if spacebridge_client.project_name is not None
-            else project_name
+            else project
         )
         logger.debug(
-            f"Search using context: Org='{final_org_name}', Project='{final_project_name}'"
+            f"Search using context: Org='{final_org}', Project='{final_project}'"
         )
 
         # Use the globally initialized client, passing the determined context
         search_results_raw = spacebridge_client.search_issues(
             query=query,
             search_type=search_type,
-            org_name=final_org_name,  # Pass final context
-            project_name=final_project_name,  # Pass final context
+            org_name=final_org,  # Pass final context
+            project_name=final_project,  # Pass final context
+            status=status,  # Pass filter
+            labels=labels,  # Pass filter
+            assignee=assignee,  # Pass filter
+            priority=priority,  # Pass filter
         )
 
         # Format results into the output schema
@@ -219,14 +230,18 @@ async def search_issues_handler(
 
 @app.tool(
     name="create_issue",
-    description="Creates a new issue in SpaceBridge, checking for duplicates. Always define project_name. Define org_name if known. Issue title and description should ALWAYS be in present tense.",
+    description="Creates a new issue in SpaceBridge, checking for duplicates. Always define project slug. Define org if known. Issue title and description should ALWAYS be in present tense.",
 )
 async def create_issue_handler(
     title: str,
     description: str,
-    org_name: Optional[str] = None,  # Added optional param
-    project_name: Optional[str] = None,  # Added optional param
-    labels: Optional[List[str]] = None,  # Added labels param
+    org: Optional[str] = None,
+    project: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    assignee: Optional[str] = None,
+    priority: Optional[str] = None,
+    status: Optional[str] = None,
+    similarity_search: Optional[bool] = True,
 ) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
@@ -235,88 +250,92 @@ async def create_issue_handler(
     """
     logger.info(
         f"Executing tool 'create_issue' for title: '{title}', "
-        f"org: {org_name}, project: {project_name}, labels: {labels}"
+        f"org: {org}, project: {project}, labels: {labels}"
     )
     try:
         # Determine final context (Tool arguments take priority)
-        final_org_name = org_name or spacebridge_client.org_name
-        final_project_name = project_name or spacebridge_client.project_name
+        final_org = org or spacebridge_client.org_name
+        final_project = project or spacebridge_client.project_name
         logger.debug(
-            f"Create using context: Org='{final_org_name}', Project='{final_project_name}'"
+            f"Create using context: Org='{final_org}', Project='{final_project}'"
         )
 
         combined_text = f"{title}\n\n{description}"
-
-        # 1. Search for potential duplicates using final context
-        logger.info(f"Searching for potential duplicates for: '{title}'")
-        potential_duplicates: List[IssueSummary] = []
-        search_failed = False
-        try:
-            potential_duplicates_raw = spacebridge_client.search_issues(
-                query=combined_text,
-                search_type="similarity",
-                org_name=final_org_name,
-                project_name=final_project_name,
-            )
-            # Ensure raw data is converted to IssueSummary objects
-            potential_duplicates = [
-                IssueSummary(**dup)
-                for dup in potential_duplicates_raw
-                if isinstance(dup, dict)
-            ]
-            logger.info(f"Found {len(potential_duplicates)} potential duplicates.")
-        except Exception as search_error:
-            search_failed = True
-            logger.warning(
-                f"Similarity search failed during duplicate check: {search_error}. "
-                f"Proceeding with creation without duplicate check."
-            )
-            # Continue without duplicate check if search fails
-
-        # 2. Perform Duplicate Check using the appropriate strategy
-        duplicate_decision = None
-        # Only run detector if search didn't fail AND found potential duplicates
-        if not search_failed and potential_duplicates:
-            # Instantiate factory (pass openai_client if needed)
-            # Assuming openai_client is available in this scope and imported
-            factory = DuplicateDetectorFactory(client=openai_client)
-            detector = factory.get_detector()
-            try:
-                duplicate_decision = await detector.check_duplicates(
-                    new_title=title,
-                    new_description=description,
-                    potential_duplicates=potential_duplicates,
-                )
-                logger.info(f"Duplicate check decision: {duplicate_decision.status}")
-            except Exception as detector_error:
-                logger.error(
-                    f"Error during duplicate detection: {detector_error}", exc_info=True
-                )
-                # If detector fails, treat as undetermined to be safe and create issue
-                # Setting decision to None ensures creation block runs
-                duplicate_decision = None
-
-        # 3. Create or return duplicate info based on decision
         output_data = None
-        if duplicate_decision and duplicate_decision.status == "duplicate":
-            dup_issue = duplicate_decision.duplicate_issue
-            if dup_issue:
-                output_data = CreateIssueOutput(
-                    issue_id=dup_issue.id,
-                    status="existing_duplicate_found",
-                    message=f"Duplicate detection determined this is a likely duplicate of issue {dup_issue.id}.",
-                    url=dup_issue.url,
+        if similarity_search:
+            # 1. Search for potential duplicates using final context
+            logger.info(f"Searching for potential duplicates for: '{title}'")
+            potential_duplicates: List[IssueSummary] = []
+            search_failed = False
+            try:
+                potential_duplicates_raw = spacebridge_client.search_issues(
+                    query=combined_text,
+                    search_type="similarity",
+                    org_name=final_org,
+                    project_name=final_project,
                 )
-                logger.info(
-                    f"Tool 'create_issue' completed (found duplicate: {dup_issue.id})."
+                # Ensure raw data is converted to IssueSummary objects
+                potential_duplicates = [
+                    IssueSummary(**dup)
+                    for dup in potential_duplicates_raw
+                    if isinstance(dup, dict)
+                ]
+                logger.info(f"Found {len(potential_duplicates)} potential duplicates.")
+            except Exception as search_error:
+                search_failed = True
+                logger.warning(
+                    f"Similarity search failed during duplicate check: {search_error}. "
+                    f"Proceeding with creation without duplicate check."
                 )
-            else:
-                # This case indicates an internal logic error in the detector
-                logger.error(
-                    "Duplicate status returned without duplicate issue details. Proceeding with creation."
-                )
-                # Fallback to creating a new issue by setting output_data back to None
-                output_data = None  # Force creation block to run
+                # Continue without duplicate check if search fails
+
+            # 2. Perform Duplicate Check using the appropriate strategy
+            duplicate_decision = None
+            # Only run detector if search didn't fail AND found potential duplicates
+            if not search_failed and potential_duplicates:
+                # Instantiate factory (pass openai_client if needed)
+                # Assuming openai_client is available in this scope and imported
+                factory = DuplicateDetectorFactory(client=openai_client)
+                detector = factory.get_detector()
+                try:
+                    duplicate_decision = await detector.check_duplicates(
+                        new_title=title,
+                        new_description=description,
+                        potential_duplicates=potential_duplicates,
+                    )
+                    logger.info(
+                        f"Duplicate check decision: {duplicate_decision.status}"
+                    )
+                except Exception as detector_error:
+                    logger.error(
+                        f"Error during duplicate detection: {detector_error}",
+                        exc_info=True,
+                    )
+                    # If detector fails, treat as undetermined to be safe and create issue
+                    # Setting decision to None ensures creation block runs
+                    duplicate_decision = None
+
+            # 3. Create or return duplicate info based on decision
+            output_data = None
+            if duplicate_decision and duplicate_decision.status == "duplicate":
+                dup_issue = duplicate_decision.duplicate_issue
+                if dup_issue:
+                    output_data = CreateIssueOutput(
+                        issue_id=dup_issue.id,
+                        status="existing_duplicate_found",
+                        message=f"Duplicate detection determined this is a likely duplicate of issue {dup_issue.id}.",
+                        url=dup_issue.url,
+                    )
+                    logger.info(
+                        f"Tool 'create_issue' completed (found duplicate: {dup_issue.id})."
+                    )
+                else:
+                    # This case indicates an internal logic error in the detector
+                    logger.error(
+                        "Duplicate status returned without duplicate issue details. Proceeding with creation."
+                    )
+                    # Fallback to creating a new issue by setting output_data back to None
+                    output_data = None  # Force creation block to run
 
         # Create issue if:
         # - No potential duplicates were found initially
@@ -338,8 +357,8 @@ async def create_issue_handler(
                 created_issue_data = spacebridge_client.create_issue(
                     title=title,
                     description=description,
-                    org_name=final_org_name,
-                    project_name=final_project_name,
+                    org_name=final_org,
+                    project_name=final_project,
                     labels=labels,
                 )
                 # Handle potential missing keys from API response defensively
@@ -377,86 +396,73 @@ async def create_issue_handler(
     description="Updates an existing issue in SpaceBridge. Always define project_name. Define org_name if known.",
 )
 async def update_issue_handler(
-    issue_id: str,
+    issue: str,  # Issue key, ID, or external ID
     title: Optional[str] = None,
     description: Optional[str] = None,
     status: Optional[str] = None,
-    org_name: Optional[str] = None,  # Added optional param
-    project_name: Optional[str] = None,  # Added optional param
+    priority: Optional[str] = None,
+    assignee: Optional[str] = None,
+    labels: Optional[List[str]] = None,
 ) -> UpdateIssueOutput:
     """
-    Implements the 'update_issue' tool using FastMCP.
-    Uses startup context first, then tool parameters as fallback for org/project.
+    Implements the 'update_issue' tool using FastMCP, aligning with the PUT /issues/issues/{issue} endpoint.
+    Org/Project context is not needed for the update API call itself.
     """
-    logger.info(
-        f"Executing tool 'update_issue' for issue ID: {issue_id}, org: {org_name}, project: {project_name}"
-    )
+    logger.info(f"Executing tool 'update_issue' for issue: {issue}")
     try:
-        # Determine final context (Startup context takes priority)
-        final_org_name = (
-            spacebridge_client.org_name
-            if spacebridge_client.org_name is not None
-            else org_name
-        )
-        final_project_name = (
-            spacebridge_client.project_name
-            if spacebridge_client.project_name is not None
-            else project_name
-        )
-        logger.debug(
-            f"Update using context: Org='{final_org_name}', Project='{final_project_name}'"
-        )
-
-        # Prepare arguments for the client method, excluding issue_id and None values
+        # Prepare the update payload based on provided arguments, aligning with IssueUpdate schema
         update_args = {
             "title": title,
             "description": description,
             "status": status,
-            # Add other fields if they exist
+            "priority": priority,
+            "assignee": assignee,
+            "labels": labels,
+            # Add 'metadata' if needed in the future
         }
-        # Filter out None values explicitly
+        # Filter out None values explicitly so only provided fields are sent
         update_payload = {k: v for k, v in update_args.items() if v is not None}
 
         if not update_payload:
-            logger.warning(
-                f"Update issue called for {issue_id} with no fields to update."
-            )
+            logger.warning(f"Update issue called for {issue} with no fields to update.")
             return UpdateIssueOutput(
-                issue_id=issue_id,
+                issue_id=issue,  # Use the input identifier
                 status="failed",
                 message="No fields provided to update.",
                 url=None,
             )
 
-        # Use the globally initialized client, passing the determined context
+        logger.debug(f"Update payload for issue {issue}: {update_payload}")
+
+        # Use the globally initialized client
+        # The client method should only require the issue identifier and the payload
         updated_issue_data = spacebridge_client.update_issue(
-            issue_id=issue_id,
-            org_name=final_org_name,  # Pass final context
-            project_name=final_project_name,  # Pass final context
+            issue=issue,  # Pass the issue identifier (ID or key)
             **update_payload,  # Pass filtered fields as keyword arguments
         )
 
-        # Assuming the client returns the updated issue data including URL
+        # Assuming the client returns the updated issue data including URL and ID
+        returned_id = updated_issue_data.get(
+            "id", issue
+        )  # Prefer returned ID, fallback to input
         output_data = UpdateIssueOutput(
-            issue_id=updated_issue_data.get(
-                "id", issue_id
-            ),  # Use returned ID or original
+            issue_id=returned_id,
             status="updated",
-            message=f"Successfully updated issue {issue_id}.",
+            message=f"Successfully updated issue {issue}.",  # Log original identifier used
             url=updated_issue_data.get("url"),
         )
-        logger.info(f"Tool 'update_issue' completed successfully for {issue_id}.")
+        logger.info(f"Tool 'update_issue' completed successfully for {issue}.")
         return output_data
 
     except Exception as e:
         logger.error(
-            f"Error executing tool 'update_issue' for {issue_id}: {e}", exc_info=True
+            f"Error executing tool 'update_issue' for {issue}: {e}", exc_info=True
         )
         # Return a failed output
         return UpdateIssueOutput(
-            issue_id=issue_id,
+            issue_id=issue,  # Use the input identifier
             status="failed",
-            message=f"An error occurred: {e}",
+            message=f"An error occurred while updating issue {issue}: {e}",
             url=None,
         )
         # Or re-raise if FastMCP should handle it:

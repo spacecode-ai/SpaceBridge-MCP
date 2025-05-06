@@ -71,7 +71,6 @@ The server requires the following configuration values:
 *   **Required:**
     *   `SPACEBRIDGE_API_KEY`: Your API key for authenticating with SpaceBridge.
 *   **Optional (Configuration & Context):**
-    *   `SPACEBRIDGE_API_URL`: Base URL for your SpaceBridge API instance (e.g., `https://your-spacebridge.com/api/v1`). (Required if not set via other methods).
     *   `SPACEBRIDGE_ORG_NAME`: Explicitly sets the organization context. (Optional).
     *   `SPACEBRIDGE_PROJECT_NAME`: Explicitly sets the project context. (Optional).
 *   **Optional (Duplicate Detection Behavior):**
@@ -85,7 +84,6 @@ These values, along with organization/project context, can be provided in multip
 1.  **Command-line Arguments:** Pass arguments when running the server. These override all other methods.
     ```bash
     spacebridge-mcp-server \
-      --spacebridge-api-url "YOUR_URL" \
       --spacebridge-api-key "YOUR_SB_KEY" \
       --openai-api-key "YOUR_OPENAI_KEY" \
       --org-name "YOUR_ORG" \        # Explicit Org Name
@@ -98,7 +96,6 @@ These values, along with organization/project context, can be provided in multip
     ```bash
     # Example setting required and some optional vars
     export SPACEBRIDGE_API_KEY="YOUR_SB_KEY"
-    export SPACEBRIDGE_API_URL="YOUR_URL" # Often needed
     export OPENAI_API_KEY="YOUR_OPENAI_KEY" # If using OpenAI duplicate check
     export SPACEBRIDGE_ORG_NAME="YOUR_ORG"
     export SPACEBRIDGE_PROJECT_NAME="YOUR_PROJECT"
@@ -109,7 +106,6 @@ These values, along with organization/project context, can be provided in multip
 3.  **.env File:** Create a file named `.env` in the directory where you run the server. Environment variables and command-line arguments override values in this file.
     ```dotenv
     # .env file content
-    SPACEBRIDGE_API_URL="YOUR_URL"
     SPACEBRIDGE_API_KEY="YOUR_SB_KEY"
     OPENAI_API_KEY="YOUR_OPENAI_KEY"
     SPACEBRIDGE_ORG_NAME="YOUR_ORG"
@@ -166,7 +162,7 @@ claude mcp add spacebridge \
 
 **Other Clients (Windsurf, Cursor, etc.):**
 
-Refer to the specific documentation for your client. The general principle is the same: provide a name for the server and the command to execute it, ensuring the necessary environment variables (`SPACEBRIDGE_API_URL`, `SPACEBRIDGE_API_KEY`, `OPENAI_API_KEY`, and optionally `SPACEBRIDGE_ORG_NAME`, `SPACEBRIDGE_PROJECT_NAME`) are passed to the command's environment. Some clients might have dedicated fields for environment variables, while others might require a wrapper script. Passing `SPACEBRIDGE_ORG_NAME` and `SPACEBRIDGE_PROJECT_NAME` is recommended for clients where the server's working directory might not match the actual project directory (e.g., Windsurf, Cursor).
+Refer to the specific documentation for your client. The general principle is the same: provide a name for the server and the command to execute it, ensuring the necessary environment variables (`SPACEBRIDGE_API_KEY`, `OPENAI_API_KEY`, and optionally `SPACEBRIDGE_ORG_NAME`, `SPACEBRIDGE_PROJECT_NAME`) are passed to the command's environment. Some clients might have dedicated fields for environment variables, while others might require a wrapper script. Passing `SPACEBRIDGE_ORG_NAME` and `SPACEBRIDGE_PROJECT_NAME` is recommended for clients where the server's working directory might not match the actual project directory (e.g., Windsurf, Cursor).
 
 ## Usage Tips & Agentic Workflows
 
