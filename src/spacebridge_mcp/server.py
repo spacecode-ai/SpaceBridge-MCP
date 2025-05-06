@@ -17,6 +17,7 @@ from mcp.server.fastmcp.server import FastMCP  # Use FastMCP
 # Removed ResourceProvider and get_tools imports
 
 from .spacebridge_client import SpaceBridgeClient
+from .duplicate_detection import DuplicateDetectorFactory
 
 # Import Pydantic models for tool function signatures
 from .tools import (
@@ -229,14 +230,14 @@ async def create_issue_handler(
 ) -> CreateIssueOutput:
     """
     Implements the 'create_issue' tool using FastMCP.
-    Includes duplicate detection via similarity search followed by LLM comparison.
-    Uses startup context first, then tool parameters as fallback for org/project.
+    Includes modular duplicate detection.
+    Uses tool parameters first, then startup context as fallback for org/project.
     """
     logger.info(
-        f"Executing tool 'create_issue' for title: '{title}', org: {org_name}, project: {project_name}"
+        f"Executing tool 'create_issue' for title: '{title}', "
+        f"org: {org_name}, project: {project_name}, labels: {labels}"
     )
     try:
-        # Determine final context (Startup context takes priority)
         # Determine final context (Tool arguments take priority)
         final_org_name = org_name or spacebridge_client.org_name
         final_project_name = project_name or spacebridge_client.project_name
@@ -249,144 +250,126 @@ async def create_issue_handler(
         # 1. Search for potential duplicates using final context
         logger.info(f"Searching for potential duplicates for: '{title}'")
         potential_duplicates: List[IssueSummary] = []
+        search_failed = False
         try:
-            # Pass final context to search
             potential_duplicates_raw = spacebridge_client.search_issues(
                 query=combined_text,
                 search_type="similarity",
                 org_name=final_org_name,
                 project_name=final_project_name,
             )
+            # Ensure raw data is converted to IssueSummary objects
             potential_duplicates = [
-                IssueSummary(**dup) for dup in potential_duplicates_raw
+                IssueSummary(**dup)
+                for dup in potential_duplicates_raw
+                if isinstance(dup, dict)
             ]
             logger.info(f"Found {len(potential_duplicates)} potential duplicates.")
         except Exception as search_error:
+            search_failed = True
             logger.warning(
-                f"Similarity search failed during duplicate check: {search_error}. Proceeding with creation."
+                f"Similarity search failed during duplicate check: {search_error}. "
+                f"Proceeding with creation without duplicate check."
             )
             # Continue without duplicate check if search fails
 
-        # 2. LLM Comparison Step
-        duplicate_found = False
-        existing_issue_id = None
-        existing_issue_url = None
-
-        if potential_duplicates:
-            top_n = 3
-            duplicates_to_check = potential_duplicates[:top_n]
-            duplicates_context = "\n\n".join(
-                [
-                    f"Existing Issue ID: {dup.id}\nTitle: {dup.title}\nDescription: {dup.description or 'N/A'}\nScore: {dup.score or 'N/A'}"
-                    for dup in duplicates_to_check
-                ]
-            )
-
-            prompt = f"""You are an expert issue tracker assistant. Your task is to determine if a new issue is a duplicate of existing issues.
-
-New Issue Details:
-Title: {title}
-Description: {description}
-
-Potential Existing Duplicates Found via Similarity Search:
----
-{duplicates_context}
----
-
-Based on the information above, is the 'New Issue' a likely duplicate of *any* of the 'Potential Existing Duplicates'?
-
-Respond with ONLY one of the following:
-1.  If it IS a duplicate: DUPLICATE: [ID of the existing issue, e.g., SB-123]
-2.  If it is NOT a duplicate: NOT_DUPLICATE
-"""
-            logger.info(f"Sending comparison prompt to LLM for new issue '{title}'...")
+        # 2. Perform Duplicate Check using the appropriate strategy
+        duplicate_decision = None
+        # Only run detector if search didn't fail AND found potential duplicates
+        if not search_failed and potential_duplicates:
+            # Instantiate factory (pass openai_client if needed)
+            # Assuming openai_client is available in this scope and imported
+            factory = DuplicateDetectorFactory(client=openai_client)
+            detector = factory.get_detector()
             try:
-                llm_response = await openai_client.chat.completions.create(
-                    model="gpt-4o",  # TODO: Make configurable
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
-                    max_tokens=50,
+                duplicate_decision = await detector.check_duplicates(
+                    new_title=title,
+                    new_description=description,
+                    potential_duplicates=potential_duplicates,
                 )
-                llm_decision_raw = llm_response.choices[0].message.content.strip()
-                logger.info(f"LLM response received: '{llm_decision_raw}'")
-
-                if llm_decision_raw.startswith("DUPLICATE:"):
-                    parts = llm_decision_raw.split(":", 1)
-                    if len(parts) == 2:
-                        potential_id = parts[1].strip()
-                        matched_dup = next(
-                            (
-                                dup
-                                for dup in duplicates_to_check
-                                if dup.id == potential_id
-                            ),
-                            None,
-                        )
-                        if matched_dup:
-                            duplicate_found = True
-                            existing_issue_id = matched_dup.id
-                            existing_issue_url = matched_dup.url
-                            logger.info(
-                                f"LLM identified duplicate: {existing_issue_id}"
-                            )
-                        else:
-                            logger.warning(
-                                f"LLM reported duplicate ID '{potential_id}' but it wasn't in the top {top_n} checked."
-                            )
-                    else:
-                        logger.warning(
-                            f"LLM response started with DUPLICATE: but format was unexpected: {llm_decision_raw}"
-                        )
-                elif llm_decision_raw == "NOT_DUPLICATE":
-                    logger.info("LLM confirmed not a duplicate.")
-                else:
-                    logger.warning(
-                        f"LLM response was not in the expected format: {llm_decision_raw}"
-                    )
-
-            except Exception as llm_error:
+                logger.info(f"Duplicate check decision: {duplicate_decision.status}")
+            except Exception as detector_error:
                 logger.error(
-                    f"Error calling OpenAI API for duplicate check: {llm_error}",
+                    f"Error during duplicate detection: {detector_error}", exc_info=True
+                )
+                # If detector fails, treat as undetermined to be safe and create issue
+                # Setting decision to None ensures creation block runs
+                duplicate_decision = None
+
+        # 3. Create or return duplicate info based on decision
+        output_data = None
+        if duplicate_decision and duplicate_decision.status == "duplicate":
+            dup_issue = duplicate_decision.duplicate_issue
+            if dup_issue:
+                output_data = CreateIssueOutput(
+                    issue_id=dup_issue.id,
+                    status="existing_duplicate_found",
+                    message=f"Duplicate detection determined this is a likely duplicate of issue {dup_issue.id}.",
+                    url=dup_issue.url,
+                )
+                logger.info(
+                    f"Tool 'create_issue' completed (found duplicate: {dup_issue.id})."
+                )
+            else:
+                # This case indicates an internal logic error in the detector
+                logger.error(
+                    "Duplicate status returned without duplicate issue details. Proceeding with creation."
+                )
+                # Fallback to creating a new issue by setting output_data back to None
+                output_data = None  # Force creation block to run
+
+        # Create issue if:
+        # - No potential duplicates were found initially
+        # - Similarity search failed
+        # - Duplicate detector failed
+        # - Duplicate detector decided 'not_duplicate'
+        # - Duplicate detector decided 'undetermined'
+        # - Duplicate detector decided 'duplicate' but failed to provide details (handled above)
+        if (
+            output_data is None
+        ):  # Checks if output_data wasn't set in the duplicate block
+            action = (
+                "Creating new issue"
+                if not duplicate_decision
+                else f"Creating new issue (detector status: {duplicate_decision.status})"
+            )
+            logger.info(f"{action}...")
+            try:
+                created_issue_data = spacebridge_client.create_issue(
+                    title=title,
+                    description=description,
+                    org_name=final_org_name,
+                    project_name=final_project_name,
+                    labels=labels,
+                )
+                # Handle potential missing keys from API response defensively
+                created_id = created_issue_data.get("id", "UNKNOWN")
+                created_url = created_issue_data.get("url")
+                output_data = CreateIssueOutput(
+                    issue_id=created_id,
+                    status="created",
+                    message="Successfully created new issue.",
+                    url=created_url,
+                )
+                logger.info(
+                    f"Tool 'create_issue' completed (created new issue: {created_id})."
+                )
+            except Exception as create_error:
+                logger.error(
+                    f"Failed to create issue after duplicate check: {create_error}",
                     exc_info=True,
                 )
-                # Proceed as if not a duplicate if LLM fails
-                duplicate_found = False
-
-        # 3. Create or return duplicate info
-        if not duplicate_found:
-            logger.info(
-                "No significant duplicate found or LLM check failed/skipped. Creating new issue..."
-            )
-            # Pass final context to create
-            created_issue_data = spacebridge_client.create_issue(
-                title=title,
-                description=description,
-                org_name=final_org_name,
-                project_name=final_project_name,
-                labels=labels,  # Pass labels to the client method
-            )
-            output_data = CreateIssueOutput(
-                issue_id=created_issue_data.get("id", "UNKNOWN"),
-                status="created",
-                message="Successfully created new issue.",
-                url=created_issue_data.get("url"),
-            )
-            logger.info("Tool 'create_issue' completed (created new issue).")
-        else:
-            output_data = CreateIssueOutput(
-                issue_id=existing_issue_id,
-                status="existing_duplicate_found",
-                message=f"LLM determined this is a likely duplicate of issue {existing_issue_id}. No new issue created.",
-                url=existing_issue_url,
-            )
-            logger.info("Tool 'create_issue' completed (found duplicate).")
+                # Re-raising seems appropriate for FastMCP handler.
+                raise create_error
 
         return output_data
 
     except Exception as e:
-        logger.error(f"Error executing tool 'create_issue': {e}", exc_info=True)
-        # TODO: Raise specific FastMCP tool error?
-        raise  # Let FastMCP handle the error reporting
+        # Log the error before re-raising to ensure it's captured
+        logger.error(
+            f"Unhandled error executing tool 'create_issue': {e}", exc_info=True
+        )
+        raise  # Let FastMCP handle the final error reporting
 
 
 @app.tool(
@@ -623,7 +606,14 @@ def main_sync():
             project_name=startup_project_name,  # Use determined startup context
         )
         logger.info("Initializing OpenAI Client...")
-        openai_client = openai.AsyncOpenAI(api_key=final_openai_key)
+        # Prepare OpenAI client parameters
+        openai_params = {"api_key": final_openai_key}
+        openai_api_base = os.environ.get("OPENAI_API_BASE")
+        if openai_api_base:
+            logger.info(f"Using custom OpenAI API URL: {openai_api_base}")
+            openai_params["base_url"] = openai_api_base
+
+        openai_client = openai.AsyncOpenAI(**openai_params)
         logger.info("Clients initialized successfully.")
 
         # 5a. Perform version check after client initialization
