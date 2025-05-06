@@ -3,10 +3,11 @@
 Client for interacting with the SpaceBridge REST API.
 """
 
-import httpx  # Use httpx instead of requests
+import requests  # Use requests instead of httpx
 import os
 from typing import Optional, Dict, Any, List
 import logging
+import urllib.parse
 
 # Configure logging
 logging.basicConfig(
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SpaceBridgeClient:
-    """Handles communication with the SpaceBridge API using httpx."""
+    """Handles communication with the SpaceBridge API using requests."""
 
     def __init__(
         self,
@@ -53,58 +54,88 @@ class SpaceBridgeClient:
             "Content-Type": "application/json",
         }
         # Ensure base URL doesn't end with a slash
-        self.api_url = self.api_url.rstrip("/")
+        self.base_url = self.api_url.rstrip("/")
         # Ensure base URL ends with /api/v1
-        if not self.api_url.endswith("/api/v1"):
-            self.api_url += "/api/v1"
+        if not self.base_url.endswith("/api/v1"):
+            self.base_url += "/api/v1"
 
-        # Initialize httpx client once
-        self._httpx_client = httpx.Client(base_url=self.api_url, headers=self.headers)
+        # Initialize requests session once
+        self._session = requests.Session()
+        self._session.headers.update(self.headers)
 
     def _request(
         self, method: str, endpoint: str, **kwargs
     ) -> Dict[str, Any] | List[Dict[str, Any]]:
-        """Makes a request to the SpaceBridge API using httpx."""
-        # url is handled by base_url in the client
-        endpoint = endpoint.lstrip("/")
+        """Makes a request to the SpaceBridge API using requests."""
+        # Construct the full URL
+        url = urllib.parse.urljoin(self.base_url + "/", endpoint.lstrip("/"))
         try:
-            response = self._httpx_client.request(method, endpoint, **kwargs)
-            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+            response = self._session.request(method, url, **kwargs)
+            response.raise_for_status()  # Raise requests.exceptions.HTTPError for bad status codes (4xx or 5xx)
             # Handle cases where API might return empty body on success (e.g., 204 No Content)
             if response.status_code == 204:
                 return {}  # Or None, depending on expected behavior
+            # Check if response content is empty before trying to parse JSON
+            if not response.content:
+                return {}  # Or handle as appropriate, maybe log a warning
             return response.json()
-        except httpx.HTTPStatusError as e:
+        except requests.exceptions.HTTPError as e:
             # Log specific HTTP errors
-            print(
-                f"HTTP error calling SpaceBridge API ({e.request.url}): {e.response.status_code} - {e.response.text}"
-            )
-            raise  # Re-raise the specific httpx error
-        except httpx.RequestError as e:
+            error_message = f"HTTP error calling SpaceBridge API ({e.request.url}): {e.response.status_code}"
+            try:
+                # Attempt to get more details from the response body if available
+                error_details = e.response.json()
+                error_message += f" - {error_details}"
+            except requests.exceptions.JSONDecodeError:
+                # Fallback if the error response is not JSON
+                error_message += f" - {e.response.text}"
+            logger.error(error_message)
+            raise  # Re-raise the specific requests error
+        except requests.exceptions.RequestException as e:
             # Log other request errors (connection, timeout, etc.)
-            print(f"Request error calling SpaceBridge API ({e.request.url}): {e}")
-            raise  # Re-raise the specific httpx error
+            logger.error(
+                f"Request error calling SpaceBridge API ({e.request.url}): {e}"
+            )
+            raise  # Re-raise the specific requests error
 
-    def get_issue(self, issue_id: str) -> Dict[str, Any]:
+    def get_issue(
+        self,
+        issue: str,
+        org_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Retrieves an issue by its ID.
-        Corresponds to: GET /api/v1/issues/{issue_id}
+        Retrieves an issue by its Key, ID or External ID.
+        Corresponds to: GET /api/v1/issues/{issue}
         """
-        # print(f"Fetching issue {issue_id} from SpaceBridge...") # Keep print for debugging? Optional.
-        return self._request("GET", f"issues/{issue_id}")  # Removed /api/v1 prefix
+        # print(f"Fetching issue {issue} from SpaceBridge...") # Keep print for debugging? Optional.
+        issue = urllib.parse.quote(issue, safe="")
+        logger.info(f"Fetching issue {issue} from SpaceBridge...")
+        params = (
+            {"organization": org_name, "project": project_name}
+            if org_name and project_name
+            else {}
+        )
+        return self._request("GET", f"issues/{issue}", params=params)
 
     def search_issues(
         self,
         query: str,
         search_type: str = "similarity",
-        org_name: Optional[str] = None,  # Added optional param
-        project_name: Optional[str] = None,  # Added optional param
+        org_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+        status: Optional[str] = None,
+        labels: Optional[str] = None,  # Comma-separated string
+        assignee: Optional[str] = None,
+        priority: Optional[str] = None,
+        # Add other filters from OpenAPI spec as needed (e.g., last_updated_before/after)
     ) -> List[Dict[str, Any]]:
         """
-        Searches for issues using full-text or similarity search.
+        Searches for issues using full-text or similarity search with optional filters.
         Uses provided org/project context if available, otherwise falls back to client's startup context.
-        Corresponds to: GET /api/v1/issues/search?query={query}&search_type={search_type}
+        Corresponds to: GET /api/v1/issues/search
         """
+        # Start with mandatory params
         params = {"query": query, "search_type": search_type}
 
         # Determine context to use (passed arg takes precedence over startup context)
@@ -113,29 +144,32 @@ class SpaceBridgeClient:
             project_name if project_name is not None else self.project_name
         )
 
-        # Add org and project to params if determined
+        # Add context and optional filters to params if they are provided (not None)
         if final_org_name:
             params["organization"] = final_org_name
         if final_project_name:
             params["project"] = final_project_name
+        if status:
+            params["status"] = status
+        if labels:
+            params["labels"] = labels  # API expects comma-separated string
+        if assignee:
+            params["assignee"] = assignee
+        if priority:
+            params["priority"] = priority
+        # Add other filters here if implemented
 
         logger.info(f"Searching issues with params: {params}")
-        # Assuming the API returns a list directly or a dict containing a list key (e.g., 'results')
-        # Adjust parsing if the API response structure is different.
-        # Pass params directly to httpx request
-        response_data = self._request(
-            "GET", "issues/search", params=params
-        )  # Removed /api/v1 prefix
-        # Assuming API returns a list directly based on previous logic
+        # Pass filtered params to requests
+        response_data = self._request("GET", "issues/search", params=params)
+
+        # Assuming API returns a list directly based on previous logic and OpenAPI spec
         if isinstance(response_data, list):
             return response_data
-        # Add handling for nested results if necessary, e.g.:
-        # elif isinstance(response_data, dict) and 'results' in response_data:
-        #     return response_data['results']
         else:
             # Handle unexpected response format
-            print(
-                f"Warning: Unexpected format received from search API: {type(response_data)}"
+            logger.warning(
+                f"Warning: Unexpected format received from search API: {type(response_data)}. Expected list."
             )
             return []  # Return empty list if format is wrong
 
@@ -174,13 +208,13 @@ class SpaceBridgeClient:
         if labels:
             payload["labels"] = labels
 
-        # Pass json payload directly to httpx request
+        # Pass json payload directly to requests
         logger.info(f"Creating issue with payload: {payload}")
-        return self._request("POST", "issues", json=payload)  # Removed /api/v1 prefix
+        return self._request("POST", "issues", json=payload)
 
     def update_issue(
         self,
-        issue_id: str,
+        issue: str,
         org_name: Optional[str] = None,  # Added optional param
         project_name: Optional[str] = None,  # Added optional param
         **kwargs,
@@ -190,22 +224,20 @@ class SpaceBridgeClient:
         Uses provided org/project context if available, otherwise falls back to client's startup context.
 
         Args:
-            issue_id: The ID of the issue to update.
+            issue: The Key, ID or External ID of the issue to update.
             org_name: Optional organization context override.
             project_name: Optional project context override.
             **kwargs: Fields to update (e.g., title="New Title", status="Closed").
                       Only non-None values will be included in the request.
 
-        Corresponds to: PATCH /api/v1/issues/{issue_id}
+        Corresponds to: PATCH /api/v1/issues/{issue}
         """
         # Separate update fields from context args (though context args are named)
         update_fields = {k: v for k, v in kwargs.items() if v is not None}
 
         if not update_fields:
-            logger.warning(
-                f"Update issue called for {issue_id} with no fields to update."
-            )
-            return {"id": issue_id, "message": "No fields provided for update."}
+            logger.warning(f"Update issue called for {issue} with no fields to update.")
+            return {"id": issue, "message": "No fields provided for update."}
 
         payload = update_fields.copy()  # Start payload with actual update fields
 
@@ -221,11 +253,12 @@ class SpaceBridgeClient:
         if final_project_name:
             payload["project"] = final_project_name
 
-        logger.info(f"Updating issue {issue_id} with payload: {payload}")
+        logger.info(f"Updating issue {issue} with payload: {payload}")
         # Assuming PATCH returns the updated issue data
         # Endpoint already correct here, no change needed for PATCH
         # Changed from PATCH to PUT based on live API 405 error
-        return self._request("PUT", f"issues/{issue_id}", json=payload)
+        issue = urllib.parse.quote(issue, safe="")
+        return self._request("PUT", f"issues/{issue}", json=payload)
 
     def get_version(self, client_version: str) -> Dict[str, Any]:
         """
@@ -245,10 +278,25 @@ class SpaceBridgeClient:
             custom_headers["X-Client-Project"] = self.project_name
 
         logger.info(f"Getting server version with client version {client_version}")
-        # Make request with custom headers for this call only
-        return self._request(
-            "GET", "version", headers=custom_headers
-        )  # Removed /api/v1 prefix
+        # Make request with custom headers for this call only using requests
+        # Note: _request now uses the session, which has base headers.
+        # We need to merge headers carefully or make a one-off request.
+        # For simplicity, let's use requests.get directly for this specific case.
+        url = urllib.parse.urljoin(self.base_url + "/", "version")
+        try:
+            response = requests.get(url, headers=custom_headers)
+            response.raise_for_status()
+            if response.status_code == 204 or not response.content:
+                return {}
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            logger.error(
+                f"HTTP error getting version ({e.request.url}): {e.response.status_code} - {e.response.text}"
+            )
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error getting version ({e.request.url}): {e}")
+            raise
 
 
 # Example usage (for testing purposes)
