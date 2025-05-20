@@ -108,14 +108,13 @@ class SpaceBridgeClient:
         Retrieves an issue by its Key, ID or External ID.
         Corresponds to: GET /api/v1/issues/{issue}
         """
-        # print(f"Fetching issue {issue} from SpaceBridge...") # Keep print for debugging? Optional.
         issue = urllib.parse.quote(issue, safe="")
         logger.info(f"Fetching issue {issue} from SpaceBridge...")
-        params = (
-            {"organization": org_name, "project": project_name}
-            if org_name and project_name
-            else {}
-        )
+        params = {}
+        if project_name:
+            params["project"] = project_name
+            if org_name:
+                params["organization"] = org_name
         return self._request("GET", f"issues/{issue}", params=params)
 
     def search_issues(
@@ -145,10 +144,10 @@ class SpaceBridgeClient:
         )
 
         # Add context and optional filters to params if they are provided (not None)
-        if final_org_name:
-            params["organization"] = final_org_name
         if final_project_name:
             params["project"] = final_project_name
+            if final_org_name:
+                params["organization"] = final_org_name
         if status:
             params["status"] = status
         if labels:
@@ -248,10 +247,10 @@ class SpaceBridgeClient:
         )
 
         # Add org and project context to payload if determined (API might use this for authorization/scoping)
-        if final_org_name:
-            payload["organization"] = final_org_name
         if final_project_name:
             payload["project"] = final_project_name
+            if final_org_name:
+                payload["organization"] = final_org_name
 
         logger.info(f"Updating issue {issue} with payload: {payload}")
         # Assuming PATCH returns the updated issue data
