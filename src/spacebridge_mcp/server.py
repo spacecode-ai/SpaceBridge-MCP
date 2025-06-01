@@ -8,23 +8,21 @@ import os
 import logging
 import configparser
 import re
-import argparse  # Added for command-line arguments
-import openai  # Added for LLM integration
-from dotenv import load_dotenv  # Added for .env support
-from packaging.version import parse as parse_version  # Added for version comparison
-import importlib.metadata  # Added to get own version
-from mcp.server.fastmcp.server import FastMCP  # Use FastMCP
-# Removed ResourceProvider and get_tools imports
+import argparse
+import openai
+from dotenv import load_dotenv
+from packaging.version import parse as parse_version
+import importlib.metadata
+from mcp.server.fastmcp.server import FastMCP
 
 from .spacebridge_client import SpaceBridgeClient
 from .duplicate_detection import DuplicateDetectorFactory
 
-# Import Pydantic models for tool function signatures
 from .tools import (
     SearchIssuesOutput,
     CreateIssueOutput,
-    UpdateIssueOutput,  # Added update schemas
-    IssueSummary,  # Needed for create_issue logic
+    UpdateIssueOutput,
+    IssueSummary,
 )
 from typing import (
     List,
@@ -32,19 +30,14 @@ from typing import (
     Any,
     Literal,
     Optional,
-)  # Add Dict, Any, Literal, Optional for type hints
+)
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # --- Configuration Loading ---
-# Configuration will be loaded in main_sync using argparse, environment variables, and .env file.
-# Precedence: Command-line args > Environment variables > .env file
-
-
 def get_config_value(args, env_var_name: str) -> str | None:
     """
     Gets a configuration value based on precedence: command-line args, environment variables, .env file.
@@ -75,8 +68,6 @@ openai_client = None
 
 
 # --- Git Configuration Extraction ---
-
-
 def get_git_info(git_config_path=".git/config") -> tuple[str | None, str | None]:
     """
     Reads the .git/config file and extracts organization and project name
@@ -123,16 +114,10 @@ def get_git_info(git_config_path=".git/config") -> tuple[str | None, str | None]
     return org_name, project_name
 
 
-# Git info will be determined within main_sync based on configuration precedence.
-
-
 # --- Create FastMCP App ---
-# TODO: Update name/version/description as needed
 app = FastMCP(
     name="spacebridge-issue-manager",
-    # version="0.3.0-fastmcp", # Version can be set here or inferred
     description="MCP Server for interacting with SpaceBridge issue tracking via FastMCP.",
-    # Pass settings directly if needed, e.g., log_level="DEBUG"
 )
 
 # --- Define Tool Handlers ---
@@ -174,10 +159,10 @@ async def search_issues_handler(
     search_type: Literal["full_text", "similarity"] = "similarity",
     org: Optional[str] = None,
     project: Optional[str] = None,
-    status: Optional[str] = None,  # Added filter
-    labels: Optional[str] = None,  # Added filter (comma-separated string)
-    assignee: Optional[str] = None,  # Added filter
-    priority: Optional[str] = None,  # Added filter
+    status: Optional[str] = None,
+    labels: Optional[str] = None,
+    assignee: Optional[str] = None,
+    priority: Optional[str] = None,
 ) -> SearchIssuesOutput:
     """Implements the 'search_issues' tool using FastMCP."""
     logger.info(
@@ -205,12 +190,12 @@ async def search_issues_handler(
         search_results_raw = spacebridge_client.search_issues(
             query=query,
             search_type=search_type,
-            org_name=final_org,  # Pass final context
-            project_name=final_project,  # Pass final context
-            status=status,  # Pass filter
-            labels=labels,  # Pass filter
-            assignee=assignee,  # Pass filter
-            priority=priority,  # Pass filter
+            org_name=final_org,
+            project_name=final_project,
+            status=status,
+            labels=labels,
+            assignee=assignee,
+            priority=priority,
         )
 
         # Format results into the output schema
@@ -224,8 +209,7 @@ async def search_issues_handler(
 
     except Exception as e:
         logger.error(f"Error executing tool 'search_issues': {e}", exc_info=True)
-        # TODO: Raise specific FastMCP tool error?
-        raise  # Let FastMCP handle the error reporting
+        raise
 
 
 @app.tool(
@@ -434,14 +418,11 @@ async def update_issue_handler(
 
         logger.debug(f"Update payload for issue {issue}: {update_payload}")
 
-        # Use the globally initialized client
-        # The client method should only require the issue identifier and the payload
         updated_issue_data = spacebridge_client.update_issue(
-            issue=issue,  # Pass the issue identifier (ID or key)
-            **update_payload,  # Pass filtered fields as keyword arguments
+            issue=issue,
+            **update_payload,
         )
 
-        # Assuming the client returns the updated issue data including URL and ID
         returned_id = updated_issue_data.get(
             "id", issue
         )  # Prefer returned ID, fallback to input
@@ -458,25 +439,16 @@ async def update_issue_handler(
         logger.error(
             f"Error executing tool 'update_issue' for {issue}: {e}", exc_info=True
         )
-        # Return a failed output
         return UpdateIssueOutput(
-            issue_id=issue,  # Use the input identifier
+            issue_id=issue,
             status="failed",
             message=f"An error occurred while updating issue {issue}: {e}",
             url=None,
         )
-        # Or re-raise if FastMCP should handle it:
-        # raise
-
-
-# --- Main execution logic moved to main_sync ---
-# The async main function is no longer needed with FastMCP's run method
 
 
 def main_sync():
     """Parses arguments, loads config, initializes clients, performs version check, and runs the FastMCP server."""
-
-    # 1. Load .env file first (if it exists) - values can be overridden by env vars or args
     dotenv_path = os.path.join(os.getcwd(), ".env")
     if os.path.exists(dotenv_path):
         logger.info(f"Loading environment variables from: {dotenv_path}")
@@ -514,7 +486,6 @@ def main_sync():
         "--project-name",
         help="Explicitly set the project name (overrides env var and Git detection)",
     )
-    # Add other arguments as needed (e.g., --log-level)
 
     args = parser.parse_args()
 
@@ -542,11 +513,11 @@ def main_sync():
         )
         logger.error(error_message)
         print(f"Error: {error_message}")
-        parser.print_help()  # Show help message on config error
-        return  # Exit if config is missing
+        parser.print_help()
+        return  
 
     # 5. Initialize clients using final configuration
-    global spacebridge_client, openai_client  # Need globals as handlers access these
+    global spacebridge_client, openai_client 
     try:
         # Determine startup org and project context based on precedence
         startup_org_name = None
@@ -608,11 +579,10 @@ def main_sync():
         spacebridge_client = SpaceBridgeClient(
             api_url=final_api_url,
             api_key=final_api_key,
-            org_name=startup_org_name,  # Use determined startup context
-            project_name=startup_project_name,  # Use determined startup context
+            org_name=startup_org_name,
+            project_name=startup_project_name,
         )
         logger.info("Initializing OpenAI Client...")
-        # Prepare OpenAI client parameters
         openai_params = {"api_key": final_openai_key}
         openai_api_base = os.environ.get("OPENAI_API_BASE")
         if openai_api_base:

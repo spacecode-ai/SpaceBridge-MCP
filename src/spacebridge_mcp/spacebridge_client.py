@@ -124,10 +124,9 @@ class SpaceBridgeClient:
         org_name: Optional[str] = None,
         project_name: Optional[str] = None,
         status: Optional[str] = None,
-        labels: Optional[str] = None,  # Comma-separated string
+        labels: Optional[str] = None,
         assignee: Optional[str] = None,
         priority: Optional[str] = None,
-        # Add other filters from OpenAPI spec as needed (e.g., last_updated_before/after)
     ) -> List[Dict[str, Any]]:
         """
         Searches for issues using full-text or similarity search with optional filters.
@@ -151,12 +150,11 @@ class SpaceBridgeClient:
         if status:
             params["status"] = status
         if labels:
-            params["labels"] = labels  # API expects comma-separated string
+            params["labels"] = labels
         if assignee:
             params["assignee"] = assignee
         if priority:
             params["priority"] = priority
-        # Add other filters here if implemented
 
         logger.info(f"Searching issues with params: {params}")
         # Pass filtered params to requests
