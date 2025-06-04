@@ -37,6 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # --- Configuration Loading ---
 def get_config_value(args, env_var_name: str) -> str | None:
     """
@@ -199,7 +200,7 @@ async def search_handler(
             priority=priority,
             embedding_type=embedding_type,
         )
-        
+
         return search_results_raw
 
     except Exception as e:
@@ -509,10 +510,10 @@ def main_sync():
         logger.error(error_message)
         print(f"Error: {error_message}")
         parser.print_help()
-        return  
+        return
 
     # 5. Initialize clients using final configuration
-    global spacebridge_client, openai_client 
+    global spacebridge_client, openai_client
     try:
         # Determine startup org and project context based on precedence
         startup_org_name = None
