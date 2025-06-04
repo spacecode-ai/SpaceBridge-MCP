@@ -151,12 +151,13 @@ async def get_issue_tool_handler(
 
 
 @app.tool(
-    name="search_issues",
-    description="Searches for issues in SpaceBridge. Always define project slug. Use similarity search for best results.",
+    name="search",
+    description="Searches for issues or comments in SpaceBridge. Always define project slug. Use similarity search for best results.",
 )
-async def search_issues_handler(
+async def search_handler(
     query: str,
     search_type: Literal["full_text", "similarity"] = "similarity",
+    embedding_type: Optional[Literal["issue", "comment", None]] = None,
     org: Optional[str] = None,
     project: Optional[str] = None,
     status: Optional[str] = None,
@@ -164,9 +165,9 @@ async def search_issues_handler(
     assignee: Optional[str] = None,
     priority: Optional[str] = None,
 ) -> SearchIssuesOutput:
-    """Implements the 'search_issues' tool using FastMCP."""
+    """Implements the 'search' tool using FastMCP."""
     logger.info(
-        f"Executing tool 'search_issues' with query: '{query}', type: {search_type}, "
+        f"Executing tool 'search' with query: '{query}', type: {search_type}, "
         f"org: {org}, project: {project}, status: {status}, labels: {labels}, "
         f"assignee: {assignee}, priority: {priority}"
     )
@@ -187,7 +188,7 @@ async def search_issues_handler(
         )
 
         # Use the globally initialized client, passing the determined context
-        search_results_raw = spacebridge_client.search_issues(
+        search_results_raw = spacebridge_client.search(
             query=query,
             search_type=search_type,
             org_name=final_org,
@@ -196,19 +197,13 @@ async def search_issues_handler(
             labels=labels,
             assignee=assignee,
             priority=priority,
+            embedding_type=embedding_type,
         )
-
-        # Format results into the output schema
-        # Ensure the raw results match the IssueSummary model structure
-        output_data = SearchIssuesOutput(
-            results=[IssueSummary(**result) for result in search_results_raw]
-        )
-
-        logger.info("Tool 'search_issues' completed successfully.")
-        return output_data
+        
+        return search_results_raw
 
     except Exception as e:
-        logger.error(f"Error executing tool 'search_issues': {e}", exc_info=True)
+        logger.error(f"Error executing tool 'search': {e}", exc_info=True)
         raise
 
 

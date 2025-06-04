@@ -117,10 +117,11 @@ class SpaceBridgeClient:
                 params["organization"] = org_name
         return self._request("GET", f"issues/{issue}", params=params)
 
-    def search_issues(
+    def search(
         self,
         query: str,
         search_type: str = "similarity",
+        embedding_type: Optional[str] = None,
         org_name: Optional[str] = None,
         project_name: Optional[str] = None,
         status: Optional[str] = None,
@@ -131,7 +132,7 @@ class SpaceBridgeClient:
         """
         Searches for issues using full-text or similarity search with optional filters.
         Uses provided org/project context if available, otherwise falls back to client's startup context.
-        Corresponds to: GET /api/v1/issues/search
+        Corresponds to: GET /api/v1/search
         """
         # Start with mandatory params
         params = {"query": query, "search_type": search_type}
@@ -155,20 +156,12 @@ class SpaceBridgeClient:
             params["assignee"] = assignee
         if priority:
             params["priority"] = priority
+        if embedding_type:
+            params["embedding_type"] = embedding_type
 
-        logger.info(f"Searching issues with params: {params}")
+        logger.info(f"Searching with params: {params}")
         # Pass filtered params to requests
-        response_data = self._request("GET", "issues/search", params=params)
-
-        # Assuming API returns a list directly based on previous logic and OpenAPI spec
-        if isinstance(response_data, list):
-            return response_data
-        else:
-            # Handle unexpected response format
-            logger.warning(
-                f"Warning: Unexpected format received from search API: {type(response_data)}. Expected list."
-            )
-            return []  # Return empty list if format is wrong
+        return self._request("GET", "search", params=params)
 
     def create_issue(
         self,
