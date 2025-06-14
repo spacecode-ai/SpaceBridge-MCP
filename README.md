@@ -172,6 +172,10 @@ Refer to the specific documentation for your client. The general principle is th
 *   **Context Augmentation:** When asking your AI assistant to work on a feature or bug, provide the SpaceBridge issue ID. The assistant can then use the `get_issue_by_id` resource via this MCP server to fetch the full context (description, comments, status) directly from your tracker, leading to more informed code generation or analysis.
 *   **Quick Issue Creation:** Simply ask your assistant "Create an issue about [brief description]" while coding. The `create_issue` tool will handle the similarity search and creation process.
 
+## Where to Find Us
+
+*   [MCP Review](https://mcpreview.com/mcp-servers/spacecode-ai/SpaceBridge-MCP)
+
 ## Development
 
 ### Running Tests
