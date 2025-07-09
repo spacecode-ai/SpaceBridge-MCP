@@ -80,7 +80,7 @@ def test_get_issue_not_found(client: SpaceBridgeClient):
     # Skipping the check for live API for simplicity, assuming 404 is expected failure
     # This test only runs when mocked, so expect the exception
     # Expect exception whether mocked (404) or live (404 or ConnectError)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017
         client.get_issue(issue_id)
 
 
