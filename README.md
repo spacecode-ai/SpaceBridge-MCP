@@ -1,4 +1,5 @@
 # SpaceBridge-MCP
+[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/spacecode-ai/SpaceBridge-MCP)](https://archestra.ai/mcp-catalog/spacecode-ai__spacebridge-mcp)
 
 A Model Context Protocol (MCP) server that integrates with the SpaceBridge REST API (https://spacebridge.io/docs) to automate issue management across connected issue trackers.
 
