@@ -1,3 +1,6 @@
+***IMPORTANT: This project is deprecated. Spacebridge MCP server is now available over HTTPS. See instructions at https://spacebridge.io***
+
+
 # SpaceBridge-MCP
 
 A Model Context Protocol (MCP) server that integrates with the SpaceBridge REST API (https://spacebridge.io/docs) to automate issue management across connected issue trackers.
